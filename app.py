@@ -2,15 +2,38 @@ import streamlit as st
 import pandas as pd
 import folium
 from streamlit_folium import st_folium
+import gspread
+from google.oauth2.service_account import Credentials
 
-# Configuração da página do Streamlit
-st.set_page_config(
-    page_title="SST Inspeções Pro",
-    page_icon="🛡️",
-    layout="wide"
-)
+# Configuração da página
+st.set_page_config(page_title="SST Inspeções Pro", page_icon="🛡️", layout="wide")
 
-# --- BANCO DE DADOS DE NRs (EXEMPLO) ---
+# --- CONEXÃO COM O GOOGLE SHEETS VIA GSPREAD ---
+def conectar_google_sheets():
+    # Define os escopos necessários
+    scopes = [
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive"
+    ]
+    
+    # Busca as credenciais salvas nos Secrets do Streamlit
+    creds_dict = dict(st.secrets["gcp_service_account"])
+    credentials = Credentials.from_service_account_info(creds_dict, scopes=scopes)
+    client = gspread.authorize(credentials)
+    
+    # Abre a planilha pelo ID (pode copiar da URL da sua planilha)
+    # Exemplo de URL: https://docs.google.com/spreadsheets/d/ID_DA_PLANILHA/edit
+    ID_PLANILHA = st.secrets["spreadsheet_id"]
+    sheet = client.open_by_key(ID_PLANILHA).sheet1
+    return sheet
+
+try:
+    sheet = conectar_google_sheets()
+except Exception as e:
+    st.error(f"Erro ao conectar ao Google Sheets: {e}")
+    st.stop()
+
+# --- BANCO DE DADOS DE NRs ---
 DICIONARIO_NRS = {
     "Trabalho em Altura": {
         "nr": "NR-35 (Trabalho em Altura)",
@@ -34,22 +57,13 @@ DICIONARIO_NRS = {
     }
 }
 
-# --- ESTADOS DO APP (Simulação de Banco de Dados na Memória) ---
-if "inspecoes" not in st.session_state:
-    st.session_state.inspecoes = []
-
 # --- TÍTULO DO APP ---
 st.title("🛡️ Sistema de Inspeção de Segurança do Trabalho")
-st.markdown("Registre inconformidades em campo, associe às NRs e gere relatórios instantâneos.")
 
-# --- BARRA LATERAL (MENU) ---
-menu = st.sidebar.selectbox(
-    "Navegação", 
-    ["Nova Inspeção", "Painel de Gestão (Plano de Ação)"]
-)
+menu = st.sidebar.selectbox("Navegação", ["Nova Inspeção", "Painel de Gestão (Plano de Ação)"])
 
 # ------------------------------------------------------------------
-# TELA 1: NOVA INSPEÇÃO
+# TELA 1: NOVA INSPEÇÃO (GRAVA NO GOOGLE SHEETS)
 # ------------------------------------------------------------------
 if menu == "Nova Inspeção":
     st.header("📝 Registrar Não Conformidade")
@@ -61,20 +75,18 @@ if menu == "Nova Inspeção":
             local = st.text_input("Local / Setor da Inspeção:", placeholder="Ex: Galpão de Solda, Almoxarifado")
             categoria = st.selectbox("Categoria do Desvio:", list(DICIONARIO_NRS.keys()))
             
-            # Geolocalização manual rápida (enquanto não integramos o script GPS)
-            st.markdown("**Geolocalização Aproximada (para o Mapa):**")
+            st.markdown("**Geolocalização Aproximada:**")
             lat = st.number_input("Latitude", value=-23.55052, format="%.5f")
             lon = st.number_input("Longitude", value=-46.63330, format="%.5f")
             
         with col2:
             descricao = st.text_area("Descrição Detalhada do Desvio:", placeholder="Descreva o que está errado...")
-            # Câmera fotográfica integrada
-            foto = st.camera_input("Capturar Foto da Não Conformidade")
+            # Como imagens pesadas não cabem bem no Sheets diretamente, podemos guardar um link de imagem futuramente.
+            # Por enquanto, focamos nos dados do relatório.
 
         st.markdown("---")
         st.subheader("📋 Enquadramento Legal Sugerido")
         
-        # Busca automática da NR baseada na categoria selecionada
         nr_sugerida = DICIONARIO_NRS[categoria]["nr"]
         reco_sugerida = DICIONARIO_NRS[categoria]["recomendacao"]
         
@@ -84,101 +96,92 @@ if menu == "Nova Inspeção":
         prazo = st.date_input("Prazo para Regularização:")
         responsavel = st.text_input("Responsável pela Ação:")
 
-        # Botão para salvar
         salvar = st.form_submit_button("Gravar Inspeção")
         
         if salvar:
             if not local or not descricao:
                 st.error("Por favor, preencha o Local e a Descrição!")
             else:
-                # Salva o registro temporariamente na memória
-                novo_registro = {
-                    "id": len(st.session_state.inspecoes) + 1,
-                    "local": local,
-                    "categoria": categoria,
-                    "descricao": descricao,
-                    "nr": nr_sugerida,
-                    "recomendacao": reco_usuario,
-                    "prazo": prazo.strftime('%d/%m/%Y'),
-                    "responsavel": responsavel if responsavel else "Não Definido",
-                    "lat": lat,
-                    "lon": lon,
-                    "status": "Pendente",
-                    "foto": foto # Guarda a imagem capturada
-                }
-                st.session_state.inspecoes.append(novo_registro)
-                st.success("✅ Inspeção registrada com sucesso com base nas NRs!")
+                # Obter todos os registros existentes para gerar o novo ID
+                todos_registros = sheet.get_all_records()
+                novo_id = len(todos_registros) + 1
+                
+                # Prepara a linha para o Google Sheets
+                nova_linha = [
+                    novo_id,
+                    local,
+                    categoria,
+                    descricao,
+                    nr_sugerida,
+                    reco_usuario,
+                    prazo.strftime('%d/%m/%Y'),
+                    responsavel if responsavel else "Não Definido",
+                    lat,
+                    lon,
+                    "Pendente"
+                ]
+                
+                # Grava no Google Sheets
+                sheet.append_row(nova_linha)
+                st.success("✅ Inspeção registada com sucesso na Planilha Google!")
 
 # ------------------------------------------------------------------
-# TELA 2: PAINEL DE GESTÃO / PLANO DE AÇÃO
+# TELA 2: PAINEL DE GESTÃO (LÊ E ATUALIZA O GOOGLE SHEETS)
 # ------------------------------------------------------------------
 elif menu == "Painel de Gestão (Plano de Ação)":
     st.header("📊 Painel de Controle e Plano de Ação")
     
-    if not st.session_state.inspecoes:
-        st.info("Nenhuma não conformidade registrada até o momento. Vá em 'Nova Inspeção' para começar!")
+    # Lê os dados em tempo real da Planilha Google
+    dados_planilha = sheet.get_all_records()
+    
+    if not dados_planilha:
+        st.info("Nenhuma não conformidade registada até o momento.")
     else:
-        # Criar DataFrame para exibição dos dados
-        df = pd.DataFrame(st.session_state.inspecoes)
+        df = pd.DataFrame(dados_planilha)
         
-        # Filtros rápidos no painel
+        # Filtros rápidos
         status_filtro = st.multiselect("Filtrar por Status:", ["Pendente", "Em Andamento", "Concluído"], default=["Pendente", "Em Andamento", "Concluído"])
         df_filtrado = df[df["status"].isin(status_filtro)]
         
-        # Exibe a tabela do plano de ação
         st.dataframe(
             df_filtrado[["id", "local", "categoria", "nr", "prazo", "responsavel", "status"]],
             use_container_width=True,
             hide_index=True
         )
         
+        # Mapa de Ocorrências
         st.markdown("---")
         st.subheader("🗺️ Mapa de Riscos / Ocorrências")
-        
-        # Centraliza o mapa na média das coordenadas cadastradas
-        mapa = folium.Map(location=[df_filtrado["lat"].mean(), df_filtrado["lon"].mean()], zoom_start=12)
-        
-        for idx, row in df_filtrado.iterrows():
-            folium.Marker(
-                [row["lat"], row["lon"]],
-                popup=f"<b>Local:</b> {row['local']}<br><b>Risco:</b> {row['categoria']}<br><b>Status:</b> {row['status']}",
-                tooltip=f"{row['local']} ({row['categoria']})"
-            ).add_to(mapa)
-            
-        st_folium(mapa, width=1000, height=400)
-        
+        try:
+            mapa = folium.Map(location=[float(df_filtrado["lat"].mean()), float(df_filtrado["lon"].mean())], zoom_start=12)
+            for idx, row in df_filtrado.iterrows():
+                folium.Marker(
+                    [float(row["lat"]), float(row["lon"])],
+                    popup=f"<b>Local:</b> {row['local']}<br><b>Status:</b> {row['status']}",
+                    tooltip=f"{row['local']}"
+                ).add_to(mapa)
+            st_folium(mapa, width=1000, height=400)
+        except Exception:
+            st.warning("Não foi possível carregar as coordenadas para o mapa.")
+
+        # Atualizar status de um item
         st.markdown("---")
-        st.subheader("🔍 Detalhes e Evidências")
+        st.subheader("🔍 Atualizar Ocorrência")
+        id_selecionado = st.selectbox("Escolha o ID para atualizar o status:", df_filtrado["id"])
         
-        # Seletor para ver detalhes e fotos de um item específico
-        item_selecionado = st.selectbox("Escolha uma ocorrência para ver fotos e gerar PDF:", df_filtrado["id"])
-        
-        if item_selecionado:
-            detalhe = next(item for item in st.session_state.inspecoes if item["id"] == item_selecionado)
-            col_det1, col_det2 = st.columns(2)
+        if id_selecionado:
+            # Encontra a linha correspondente no Sheets (lembrando que a linha 1 é o cabeçalho)
+            index_linha = df[df["id"] == id_selecionado].index[0] + 2 # +2 compensa o índice 0 e o cabeçalho
+            detalhe = df[df["id"] == id_selecionado].iloc[0]
             
-            with col_det1:
-                st.write(f"**📍 Local:** {detalhe['local']}")
-                st.write(f"**⚠️ Risco:** {detalhe['categoria']}")
-                st.write(f"**⚖️ Enquadramento:** {detalhe['nr']}")
-                st.write(f"**📝 Descrição:** {detalhe['descricao']}")
-                st.write(f"**💡 Recomendação:** {detalhe['recomendacao']}")
-                st.write(f"**👤 Responsável:** {detalhe['responsavel']}")
-                st.write(f"**📅 Prazo:** {detalhe['prazo']}")
-                
-                # Mudar o status do plano de ação
-                novo_status = st.selectbox(
-                    f"Atualizar Status (ID {detalhe['id']}):", 
-                    ["Pendente", "Em Andamento", "Concluído"], 
-                    index=["Pendente", "Em Andamento", "Concluído"].index(detalhe["status"])
-                )
-                if st.button("Atualizar Status"):
-                    detalhe["status"] = novo_status
-                    st.success("Status atualizado!")
-                    st.rerun()
-                    
-            with col_det2:
-                if detalhe["foto"] is not None:
-                    st.image(detalhe["foto"], caption=f"Evidência fotográfica do ID {detalhe['id']}", use_container_width=True)
-                else:
-                    st.warning("Nenhuma evidência fotográfica anexada para este item.")
+            novo_status = st.selectbox(
+                f"Novo status para o ID {id_selecionado}:", 
+                ["Pendente", "Em Andamento", "Concluído"],
+                index=["Pendente", "Em Andamento", "Concluído"].index(detalhe["status"])
+            )
+            
+            if st.button("Atualizar na Planilha"):
+                # A coluna "status" é a 11ª coluna (id, local, categoria, descricao, nr, recomendacao, prazo, responsavel, lat, lon, status)
+                sheet.update_cell(index_linha, 11, novo_status)
+                st.success("Status atualizado no Google Sheets!")
+                st.rerun()
