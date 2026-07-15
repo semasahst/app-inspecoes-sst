@@ -2,33 +2,17 @@ import streamlit as st
 import pandas as pd
 import folium
 from streamlit_folium import st_folium
-import gspread
-from google.oauth2.service_account import Credentials
+from streamlit_gsheets import GSheetsConnection
+from fpdf import FPDF
 
 # Configuração da página
 st.set_page_config(page_title="SST Inspeções Pro", page_icon="🛡️", layout="wide")
 
-# --- CONEXÃO COM O GOOGLE SHEETS VIA GSPREAD ---
-def conectar_google_sheets():
-    # Define os escopos necessários
-    scopes = [
-        "https://www.googleapis.com/auth/spreadsheets",
-        "https://www.googleapis.com/auth/drive"
-    ]
-    
-    # Busca as credenciais salvas nos Secrets do Streamlit
-    creds_dict = dict(st.secrets["gcp_service_account"])
-    credentials = Credentials.from_service_account_info(creds_dict, scopes=scopes)
-    client = gspread.authorize(credentials)
-    
-    # Abre a planilha pelo ID (pode copiar da URL da sua planilha)
-    # Exemplo de URL: https://docs.google.com/spreadsheets/d/ID_DA_PLANILHA/edit
-    ID_PLANILHA = st.secrets["spreadsheet_id"]
-    sheet = client.open_by_key(ID_PLANILHA).sheet1
-    return sheet
-
+# --- CONEXÃO NATIVA COM O GOOGLE SHEETS ---
 try:
-    sheet = conectar_google_sheets()
+    conn = st.connection("gsheets", type=GSheetsConnection)
+    # Lê todos os dados existentes
+    df_existente = conn.read(ttl=0) # ttl=0 garante dados em tempo real sem cache
 except Exception as e:
     st.error(f"Erro ao conectar ao Google Sheets: {e}")
     st.stop()
@@ -57,13 +41,59 @@ DICIONARIO_NRS = {
     }
 }
 
-# --- TÍTULO DO APP ---
-st.title("🛡️ Sistema de Inspeção de Segurança do Trabalho")
+# --- FUNÇÃO PARA GERAR RELATÓRIO PDF ---
+def gerar_pdf_inspecao(dados):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=12)
+    
+    pdf.set_fill_color(31, 78, 121)
+    pdf.set_text_color(255, 255, 255)
+    pdf.cell(190, 15, "RELATÓRIO DE INSPEÇÃO DE SEGURANÇA DO TRABALHO", ln=True, align="C", fill=True)
+    pdf.ln(10)
+    
+    pdf.set_text_color(0, 0, 0)
+    pdf.set_font("Arial", style="B", size=12)
+    pdf.cell(190, 8, f"ID do Registro: #{dados['id']}", ln=True)
+    pdf.set_font("Arial", size=11)
+    
+    pdf.cell(95, 8, f"Setor/Local: {dados['local']}", border=1)
+    pdf.cell(95, 8, f"Data Limite: {dados['prazo']}", border=1, ln=True)
+    
+    pdf.cell(95, 8, f"Responsável: {dados['responsavel']}", border=1)
+    pdf.cell(95, 8, f"Status Atual: {dados['status']}", border=1, ln=True)
+    pdf.ln(5)
+    
+    pdf.set_font("Arial", style="B", size=12)
+    pdf.set_fill_color(220, 220, 220)
+    pdf.cell(190, 8, "Descrição da Não Conformidade", ln=True, fill=True)
+    pdf.set_font("Arial", size=11)
+    pdf.multi_cell(190, 8, str(dados['descricao']), border=1)
+    pdf.ln(5)
+    
+    pdf.set_font("Arial", style="B", size=12)
+    pdf.set_fill_color(220, 220, 220)
+    pdf.cell(190, 8, "Fundamentação Legal e Recomendações Técnicas", ln=True, fill=True)
+    pdf.set_font("Arial", size=11)
+    pdf.cell(190, 8, f"Enquadramento: {dados['nr']}", border=1, ln=True)
+    
+    pdf.set_font("Arial", style="I", size=11)
+    pdf.multi_cell(190, 8, f"Recomendação Proposta:\n{dados['recomendacao']}", border=1)
+    pdf.ln(15)
+    
+    pdf.set_font("Arial", size=9)
+    pdf.cell(95, 10, "_________________________________________", ln=False, align="C")
+    pdf.cell(95, 10, "_________________________________________", ln=True, align="C")
+    pdf.cell(95, 5, "Assinatura do Inspetor de SST", ln=False, align="C")
+    pdf.cell(95, 5, "Assinatura do Responsável pelo Setor", ln=True, align="C")
+    
+    return pdf.output()
 
+# --- TÍTULO DO APP ---
 menu = st.sidebar.selectbox("Navegação", ["Nova Inspeção", "Painel de Gestão (Plano de Ação)"])
 
 # ------------------------------------------------------------------
-# TELA 1: NOVA INSPEÇÃO (GRAVA NO GOOGLE SHEETS)
+# TELA 1: NOVA INSPEÇÃO
 # ------------------------------------------------------------------
 if menu == "Nova Inspeção":
     st.header("📝 Registrar Não Conformidade")
@@ -81,8 +111,6 @@ if menu == "Nova Inspeção":
             
         with col2:
             descricao = st.text_area("Descrição Detalhada do Desvio:", placeholder="Descreva o que está errado...")
-            # Como imagens pesadas não cabem bem no Sheets diretamente, podemos guardar um link de imagem futuramente.
-            # Por enquanto, focamos nos dados do relatório.
 
         st.markdown("---")
         st.subheader("📋 Enquadramento Legal Sugerido")
@@ -102,46 +130,39 @@ if menu == "Nova Inspeção":
             if not local or not descricao:
                 st.error("Por favor, preencha o Local e a Descrição!")
             else:
-                # Obter todos os registros existentes para gerar o novo ID
-                todos_registros = sheet.get_all_records()
-                novo_id = len(todos_registros) + 1
+                novo_id = len(df_existente) + 1
                 
-                # Prepara a linha para o Google Sheets
-                nova_linha = [
-                    novo_id,
-                    local,
-                    categoria,
-                    descricao,
-                    nr_sugerida,
-                    reco_usuario,
-                    prazo.strftime('%d/%m/%Y'),
-                    responsavel if responsavel else "Não Definido",
-                    lat,
-                    lon,
-                    "Pendente"
-                ]
+                nova_linha = pd.DataFrame([{
+                    "id": novo_id,
+                    "local": local,
+                    "categoria": categoria,
+                    "descricao": descricao,
+                    "nr": nr_sugerida,
+                    "recomendacao": reco_usuario,
+                    "prazo": prazo.strftime('%d/%m/%Y'),
+                    "responsavel": responsavel if responsavel else "Não Definido",
+                    "lat": lat,
+                    "lon": lon,
+                    "status": "Pendente"
+                }])
                 
-                # Grava no Google Sheets
-                sheet.append_row(nova_linha)
-                st.success("✅ Inspeção registada com sucesso na Planilha Google!")
+                # Junta o dado novo com os antigos e faz o update na planilha
+                df_atualizado = pd.concat([df_existente, nova_linha], ignore_index=True)
+                conn.update(data=df_atualizado)
+                st.success("✅ Inspeção registrada com sucesso na Planilha Google!")
+                st.rerun()
 
 # ------------------------------------------------------------------
-# TELA 2: PAINEL DE GESTÃO (LÊ E ATUALIZA O GOOGLE SHEETS)
+# TELA 2: PAINEL DE GESTÃO
 # ------------------------------------------------------------------
 elif menu == "Painel de Gestão (Plano de Ação)":
     st.header("📊 Painel de Controle e Plano de Ação")
     
-    # Lê os dados em tempo real da Planilha Google
-    dados_planilha = sheet.get_all_records()
-    
-    if not dados_planilha:
-        st.info("Nenhuma não conformidade registada até o momento.")
+    if df_existente.empty:
+        st.info("Nenhuma não conformidade registrada até o momento.")
     else:
-        df = pd.DataFrame(dados_planilha)
-        
-        # Filtros rápidos
         status_filtro = st.multiselect("Filtrar por Status:", ["Pendente", "Em Andamento", "Concluído"], default=["Pendente", "Em Andamento", "Concluído"])
-        df_filtrado = df[df["status"].isin(status_filtro)]
+        df_filtrado = df_existente[df_existente["status"].isin(status_filtro)]
         
         st.dataframe(
             df_filtrado[["id", "local", "categoria", "nr", "prazo", "responsavel", "status"]],
@@ -164,24 +185,49 @@ elif menu == "Painel de Gestão (Plano de Ação)":
         except Exception:
             st.warning("Não foi possível carregar as coordenadas para o mapa.")
 
-        # Atualizar status de um item
+        # Atualizar status e Detalhes
         st.markdown("---")
-        st.subheader("🔍 Atualizar Ocorrência")
-        id_selecionado = st.selectbox("Escolha o ID para atualizar o status:", df_filtrado["id"])
+        st.subheader("🔍 Ações e Detalhes da Ocorrência")
+        
+        id_selecionado = st.selectbox("Escolha o ID para ver detalhes, atualizar status ou gerar PDF:", df_filtrado["id"])
         
         if id_selecionado:
-            # Encontra a linha correspondente no Sheets (lembrando que a linha 1 é o cabeçalho)
-            index_linha = df[df["id"] == id_selecionado].index[0] + 2 # +2 compensa o índice 0 e o cabeçalho
-            detalhe = df[df["id"] == id_selecionado].iloc[0]
+            detalhe = df_existente[df_existente["id"] == id_selecionado].iloc[0]
+            idx_original = df_existente[df_existente["id"] == id_selecionado].index[0]
             
-            novo_status = st.selectbox(
-                f"Novo status para o ID {id_selecionado}:", 
-                ["Pendente", "Em Andamento", "Concluído"],
-                index=["Pendente", "Em Andamento", "Concluído"].index(detalhe["status"])
-            )
+            col_det1, col_det2 = st.columns(2)
             
-            if st.button("Atualizar na Planilha"):
-                # A coluna "status" é a 11ª coluna (id, local, categoria, descricao, nr, recomendacao, prazo, responsavel, lat, lon, status)
-                sheet.update_cell(index_linha, 11, novo_status)
-                st.success("Status atualizado no Google Sheets!")
-                st.rerun()
+            with col_det1:
+                st.write(f"**📍 Local:** {detalhe['local']}")
+                st.write(f"**⚠️ Risco:** {detalhe['categoria']}")
+                st.write(f"**⚖️ Enquadramento:** {detalhe['nr']}")
+                st.write(f"**📝 Descrição:** {detalhe['descricao']}")
+                st.write(f"**💡 Recomendação:** {detalhe['recomendacao']}")
+                st.write(f"**📅 Prazo:** {detalhe['prazo']}")
+                st.write(f"**👤 Responsável:** {detalhe['responsavel']}")
+                
+            with col_det2:
+                novo_status = st.selectbox(
+                    f"Atualizar status do ID {id_selecionado}:", 
+                    ["Pendente", "Em Andamento", "Concluído"],
+                    index=["Pendente", "Em Andamento", "Concluído"].index(detalhe["status"])
+                )
+                
+                if st.button("Atualizar Status"):
+                    df_existente.at[idx_original, "status"] = novo_status
+                    conn.update(data=df_existente)
+                    st.success("Status atualizado!")
+                    st.rerun()
+                
+                st.markdown("---")
+                st.markdown("**Gerar Relatório Técnico:**")
+                try:
+                    pdf_bytes = gerar_pdf_inspecao(detalhe)
+                    st.download_button(
+                        label="📥 Descarregar Relatório em PDF",
+                        data=bytes(pdf_bytes),
+                        file_name=f"Relatorio_Inspecao_SST_ID_{id_selecionado}.pdf",
+                        mime="application/pdf"
+                    )
+                except Exception as e:
+                    st.error(f"Erro ao gerar PDF: {e}")
