@@ -4,6 +4,8 @@ import folium
 from streamlit_folium import st_folium
 from streamlit_gsheets import GSheetsConnection
 from fpdf import FPDF
+import base64
+import io
 
 # Configuração da página
 st.set_page_config(page_title="SST Inspeções Pro", page_icon="🛡️", layout="wide")
@@ -11,11 +13,16 @@ st.set_page_config(page_title="SST Inspeções Pro", page_icon="🛡️", layout
 # --- CONEXÃO NATIVA COM O GOOGLE SHEETS ---
 try:
     conn = st.connection("gsheets", type=GSheetsConnection)
-    # Lê todos os dados existentes
-    df_existente = conn.read(ttl=0) # ttl=0 garante dados em tempo real sem cache
+    df_existente = conn.read(ttl=0)
+    # Garante que todas as colunas venham como strings/tipos corretos para evitar desalinhamento
+    df_existente = pd.DataFrame(df_existente)
 except Exception as e:
     st.error(f"Erro ao conectar ao Google Sheets: {e}")
     st.stop()
+
+# --- INICIALIZAÇÃO DO ESTADO DA SESSÃO ---
+if "carrinho_desvios" not in st.session_state:
+    st.session_state.carrinho_desvios = []
 
 # --- BANCO DE DADOS DE NRs ---
 DICIONARIO_NRS = {
@@ -41,6 +48,13 @@ DICIONARIO_NRS = {
     }
 }
 
+# --- FUNÇÃO PARA CONVERTER IMAGEM PARA BASE64 ---
+def converter_imagem_para_base64(uploaded_file):
+    if uploaded_file is not None:
+        bytes_data = uploaded_file.getvalue()
+        return base64.b64encode(bytes_data).decode()
+    return ""
+
 # --- FUNÇÃO PARA GERAR RELATÓRIO PDF ---
 def gerar_pdf_inspecao(dados):
     pdf = FPDF()
@@ -59,7 +73,6 @@ def gerar_pdf_inspecao(dados):
     
     pdf.cell(95, 8, f"Setor/Local: {dados['local']}", border=1)
     pdf.cell(95, 8, f"Data Limite: {dados['prazo']}", border=1, ln=True)
-    
     pdf.cell(95, 8, f"Responsável: {dados['responsavel']}", border=1)
     pdf.cell(95, 8, f"Status Atual: {dados['status']}", border=1, ln=True)
     pdf.ln(5)
@@ -73,83 +86,139 @@ def gerar_pdf_inspecao(dados):
     
     pdf.set_font("Arial", style="B", size=12)
     pdf.set_fill_color(220, 220, 220)
-    pdf.cell(190, 8, "Fundamentação Legal e Recomendações Técnicas", ln=True, fill=True)
+    pdf.cell(190, 8, "Fundamentação Legal e Recomendações", ln=True, fill=True)
     pdf.set_font("Arial", size=11)
     pdf.cell(190, 8, f"Enquadramento: {dados['nr']}", border=1, ln=True)
+    pdf.multi_cell(190, 8, f"Recomendação:\n{dados['recomendacao']}", border=1)
+    pdf.ln(10)
     
-    pdf.set_font("Arial", style="I", size=11)
-    pdf.multi_cell(190, 8, f"Recomendação Proposta:\n{dados['recomendacao']}", border=1)
-    pdf.ln(15)
-    
+    fotos_adicionadas = False
+    for i in range(1, 4):
+        chave_foto = f'foto_{i}'
+        if chave_foto in dados and dados[chave_foto] and str(dados[chave_foto]).strip() != "":
+            if not fotos_adicionadas:
+                pdf.set_font("Arial", style="B", size=12)
+                pdf.cell(190, 8, "Evidências Fotográficas", ln=True, align="L")
+                pdf.ln(2)
+                fotos_adicionadas = True
+            try:
+                img_data = base64.b64decode(dados[chave_foto])
+                img_io = io.BytesIO(img_data)
+                pdf.image(img_io, w=60, h=45)
+                pdf.ln(5)
+            except:
+                pass
+
+    pdf.ln(10)
     pdf.set_font("Arial", size=9)
-    pdf.cell(95, 10, "_________________________________________", ln=False, align="C")
+    pdf.cell(95, 10, "_________________________________________", align="C")
     pdf.cell(95, 10, "_________________________________________", ln=True, align="C")
-    pdf.cell(95, 5, "Assinatura do Inspetor de SST", ln=False, align="C")
-    pdf.cell(95, 5, "Assinatura do Responsável pelo Setor", ln=True, align="C")
+    pdf.cell(95, 5, "Assinatura do Inspetor de SST", align="C")
+    pdf.cell(95, 5, "Assinatura do Responsável", ln=True, align="C")
     
     return pdf.output()
 
-# --- TÍTULO DO APP ---
+# --- NAVEGAÇÃO ---
 menu = st.sidebar.selectbox("Navegação", ["Nova Inspeção", "Painel de Gestão (Plano de Ação)"])
 
 # ------------------------------------------------------------------
 # TELA 1: NOVA INSPEÇÃO
 # ------------------------------------------------------------------
 if menu == "Nova Inspeção":
-    st.header("📝 Registrar Não Conformidade")
+    st.header("📝 Registrar Inspeção em Lote")
     
-    with st.form("form_inspeção", clear_on_submit=True):
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            local = st.text_input("Local / Setor da Inspeção:", placeholder="Ex: Galpão de Solda, Almoxarifado")
-            categoria = st.selectbox("Categoria do Desvio:", list(DICIONARIO_NRS.keys()))
+    st.subheader("📍 Dados Globais do Local")
+    col_loc1, col_loc2 = st.columns(2)
+    with col_loc1:
+        local_global = st.text_input("Local / Setor Geral da Inspeção:", placeholder="Ex: Galpão Central, Almoxarifado")
+    with col_loc2:
+        col_lat, col_lon = st.columns(2)
+        with col_lat:
+            lat_global = st.number_input("Latitude", value=-23.55052, format="%.5f")
+        with col_lon:
+            lon_global = st.number_input("Longitude", value=-46.63330, format="%.5f")
             
-            st.markdown("**Geolocalização Aproximada:**")
-            lat = st.number_input("Latitude", value=-23.55052, format="%.5f")
-            lon = st.number_input("Longitude", value=-46.63330, format="%.5f")
-            
-        with col2:
-            descricao = st.text_area("Descrição Detalhada do Desvio:", placeholder="Descreva o que está errado...")
-
-        st.markdown("---")
-        st.subheader("📋 Enquadramento Legal Sugerido")
+    st.markdown("---")
+    st.subheader("⚠️ Adicionar Não Conformidade ao Local")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        categoria = st.selectbox("Categoria do Desvio:", list(DICIONARIO_NRS.keys()))
+        descricao = st.text_area("Descrição do Desvio:", placeholder="Descreva o problema encontrado...")
         
         nr_sugerida = DICIONARIO_NRS[categoria]["nr"]
-        reco_sugerida = DICIONARIO_NRS[categoria]["recomendacao"]
+        st.info(f"**Dispositivo Sugerido:** {nr_sugerida}")
+        reco_usuario = st.text_area("Plano de Ação Sugerido:", value=DICIONARIO_NRS[categoria]["recomendacao"])
         
-        st.info(f"**Dispositivo Legal aplicável:** {nr_sugerida}")
-        reco_usuario = st.text_area("Recomendação/Plano de Ação Proposto:", value=reco_sugerida)
+    with col2:
+        prazo = st.date_input("Prazo limite:")
+        responsavel = st.text_input("Responsável pela correção:")
         
-        prazo = st.date_input("Prazo para Regularização:")
-        responsavel = st.text_input("Responsável pela Ação:")
+        st.markdown("**📸 Evidências Fotográficas (Até 3 fotos):**")
+        foto1 = st.file_uploader("Foto 1:", type=["png", "jpg", "jpeg"], key="f1")
+        foto2 = st.file_uploader("Foto 2 (Opcional):", type=["png", "jpg", "jpeg"], key="f2")
+        foto3 = st.file_uploader("Foto 3 (Opcional):", type=["png", "jpg", "jpeg"], key="f3")
 
-        salvar = st.form_submit_button("Gravar Inspeção")
+    if st.button("➕ Adicionar Desvio à Lista"):
+        if not local_global:
+            st.error("Preencha o Local Geral antes de adicionar um desvio!")
+        elif not descricao:
+            st.error("Preencha a descrição do desvio!")
+        else:
+            f1_str = converter_imagem_para_base64(foto1)
+            f2_str = converter_imagem_para_base64(foto2)
+            f3_str = converter_imagem_para_base64(foto3)
+            
+            st.session_state.carrinho_desvios.append({
+                "local": local_global,
+                "categoria": categoria,
+                "descricao": descricao,
+                "nr": nr_sugerida,
+                "recomendacao": reco_usuario,
+                "prazo": prazo.strftime('%d/%m/%Y'),
+                "responsavel": responsavel if responsavel else "Não Definido",
+                "lat": lat_global,
+                "lon": lon_global,
+                "status": "Pendente",
+                "foto_1": f1_str,
+                "foto_2": f2_str,
+                "foto_3": f3_str
+            })
+            st.toast("Desvio adicionado à fila!")
+
+    if st.session_state.carrinho_desvios:
+        st.markdown("---")
+        st.subheader(f"📋 Desvios aguardando envio ({len(st.session_state.carrinho_desvios)})")
         
-        if salvar:
-            if not local or not descricao:
-                st.error("Por favor, preencha o Local e a Descrição!")
-            else:
-                novo_id = len(df_existente) + 1
+        df_carrinho = pd.DataFrame(st.session_state.carrinho_desvios)
+        st.dataframe(df_carrinho[["categoria", "descricao", "nr", "responsavel"]], use_container_width=True)
+        
+        col_btn1, col_btn2 = st.columns([1, 5])
+        with col_btn1:
+            if st.button("🔥 Limpar Fila"):
+                st.session_state.carrinho_desvios = []
+                st.rerun()
+        with col_btn2:
+            if st.button("🚀 ENVIAR TODOS OS DESVIOS PARA A PLANILHA"):
+                novos_itens = []
+                id_atual = len(df_existente) + 1
                 
-                nova_linha = pd.DataFrame([{
-                    "id": novo_id,
-                    "local": local,
-                    "categoria": categoria,
-                    "descricao": descricao,
-                    "nr": nr_sugerida,
-                    "recomendacao": reco_usuario,
-                    "prazo": prazo.strftime('%d/%m/%Y'),
-                    "responsavel": responsavel if responsavel else "Não Definido",
-                    "lat": lat,
-                    "lon": lon,
-                    "status": "Pendente"
-                }])
+                for item in st.session_state.carrinho_desvios:
+                    item["id"] = id_atual
+                    novos_itens.append(item)
+                    id_atual += 1
                 
-                # Junta o dado novo com os antigos e faz o update na planilha
-                df_atualizado = pd.concat([df_existente, nova_linha], ignore_index=True)
-                conn.update(data=df_atualizado)
-                st.success("✅ Inspeção registrada com sucesso na Planilha Google!")
+                df_novos = pd.DataFrame(novos_itens)
+                
+                # Força o pandas a alinhar exatamente pelas colunas existentes da planilha original
+                # Isso impede a criação de colunas duplicadas
+                df_novos = df_novos.reindex(columns=df_existente.columns)
+                
+                df_final = pd.concat([df_existente, df_novos], ignore_index=True)
+                
+                conn.update(data=df_final)
+                st.success(f"✅ Sucesso! {len(novos_itens)} desvios salvos corretamente!")
+                st.session_state.carrinho_desvios = []
                 st.rerun()
 
 # ------------------------------------------------------------------
@@ -158,7 +227,7 @@ if menu == "Nova Inspeção":
 elif menu == "Painel de Gestão (Plano de Ação)":
     st.header("📊 Painel de Controle e Plano de Ação")
     
-    if df_existente.empty:
+    if df_existente.empty or len(df_existente.columns) < 2:
         st.info("Nenhuma não conformidade registrada até o momento.")
     else:
         status_filtro = st.multiselect("Filtrar por Status:", ["Pendente", "Em Andamento", "Concluído"], default=["Pendente", "Em Andamento", "Concluído"])
@@ -166,11 +235,9 @@ elif menu == "Painel de Gestão (Plano de Ação)":
         
         st.dataframe(
             df_filtrado[["id", "local", "categoria", "nr", "prazo", "responsavel", "status"]],
-            use_container_width=True,
-            hide_index=True
+            use_container_width=True, index=False
         )
         
-        # Mapa de Ocorrências
         st.markdown("---")
         st.subheader("🗺️ Mapa de Riscos / Ocorrências")
         try:
@@ -178,41 +245,39 @@ elif menu == "Painel de Gestão (Plano de Ação)":
             for idx, row in df_filtrado.iterrows():
                 folium.Marker(
                     [float(row["lat"]), float(row["lon"])],
-                    popup=f"<b>Local:</b> {row['local']}<br><b>Status:</b> {row['status']}",
-                    tooltip=f"{row['local']}"
+                    popup=f"<b>Local:</b> {row['local']}<br><b>Status:</b> {row['status']}"
                 ).add_to(mapa)
             st_folium(mapa, width=1000, height=400)
         except Exception:
-            st.warning("Não foi possível carregar as coordenadas para o mapa.")
+            st.warning("Sem coordenadas válidas para exibir o mapa.")
 
-        # Atualizar status e Detalhes
         st.markdown("---")
         st.subheader("🔍 Ações e Detalhes da Ocorrência")
-        
-        id_selecionado = st.selectbox("Escolha o ID para ver detalhes, atualizar status ou gerar PDF:", df_filtrado["id"])
+        id_selecionado = st.selectbox("Escolha o ID para ver detalhes:", df_filtrado["id"])
         
         if id_selecionado:
             detalhe = df_existente[df_existente["id"] == id_selecionado].iloc[0]
             idx_original = df_existente[df_existente["id"] == id_selecionado].index[0]
             
             col_det1, col_det2 = st.columns(2)
-            
             with col_det1:
                 st.write(f"**📍 Local:** {detalhe['local']}")
                 st.write(f"**⚠️ Risco:** {detalhe['categoria']}")
                 st.write(f"**⚖️ Enquadramento:** {detalhe['nr']}")
                 st.write(f"**📝 Descrição:** {detalhe['descricao']}")
-                st.write(f"**💡 Recomendação:** {detalhe['recomendacao']}")
                 st.write(f"**📅 Prazo:** {detalhe['prazo']}")
-                st.write(f"**👤 Responsável:** {detalhe['responsavel']}")
+                
+                for i in range(1, 4):
+                    campo_f = f"foto_{i}"
+                    if campo_f in detalhe and detalhe[campo_f] and str(detalhe[campo_f]).strip() != "":
+                        st.markdown(f"**Visualização da Foto {i}:**")
+                        try:
+                            st.image(base64.b64decode(detalhe[campo_f]), width=300)
+                        except:
+                            st.caption("Erro ao processar imagem.")
                 
             with col_det2:
-                novo_status = st.selectbox(
-                    f"Atualizar status do ID {id_selecionado}:", 
-                    ["Pendente", "Em Andamento", "Concluído"],
-                    index=["Pendente", "Em Andamento", "Concluído"].index(detalhe["status"])
-                )
-                
+                novo_status = st.selectbox("Atualizar status:", ["Pendente", "Em Andamento", "Concluído"], index=["Pendente", "Em Andamento", "Concluído"].index(detalhe["status"]))
                 if st.button("Atualizar Status"):
                     df_existente.at[idx_original, "status"] = novo_status
                     conn.update(data=df_existente)
