@@ -14,8 +14,14 @@ st.set_page_config(page_title="SST Inspeções Pro", page_icon="🛡️", layout
 try:
     conn = st.connection("gsheets", type=GSheetsConnection)
     df_existente = conn.read(ttl=0)
-    # Garante que todas as colunas venham como strings/tipos corretos para evitar desalinhamento
-    df_existente = pd.DataFrame(df_existente)
+    # Garante que seja um DataFrame limpo e transforma todas as colunas em strings para evitar erros de tipo
+    df_existente = pd.DataFrame(df_existente).astype(str)
+    # Se a planilha vier vazia ou sem colunas básicas, define a estrutura padrão
+    if df_existente.empty or "id" not in df_existente.columns:
+        df_existente = pd.DataFrame(columns=[
+            "id", "local", "categoria", "descricao", "nr", "recomendacao", 
+            "prazo", "responsavel", "lat", "lon", "status", "foto_1", "foto_2", "foto_3"
+        ])
 except Exception as e:
     st.error(f"Erro ao conectar ao Google Sheets: {e}")
     st.stop()
@@ -95,7 +101,7 @@ def gerar_pdf_inspecao(dados):
     fotos_adicionadas = False
     for i in range(1, 4):
         chave_foto = f'foto_{i}'
-        if chave_foto in dados and dados[chave_foto] and str(dados[chave_foto]).strip() != "":
+        if chave_foto in dados and dados[chave_foto] and str(dados[chave_foto]).strip() not in ["", "nan", "None"]:
             if not fotos_adicionadas:
                 pdf.set_font("Arial", style="B", size=12)
                 pdf.cell(190, 8, "Evidências Fotográficas", ln=True, align="L")
@@ -170,15 +176,15 @@ if menu == "Nova Inspeção":
             f3_str = converter_imagem_para_base64(foto3)
             
             st.session_state.carrinho_desvios.append({
-                "local": local_global,
-                "categoria": categoria,
-                "descricao": descricao,
-                "nr": nr_sugerida,
-                "recomendacao": reco_usuario,
+                "local": str(local_global),
+                "categoria": str(categoria),
+                "descricao": str(descricao),
+                "nr": str(nr_sugerida),
+                "recomendacao": str(reco_usuario),
                 "prazo": prazo.strftime('%d/%m/%Y'),
-                "responsavel": responsavel if responsavel else "Não Definido",
-                "lat": lat_global,
-                "lon": lon_global,
+                "responsavel": str(responsavel) if responsavel else "Não Definido",
+                "lat": str(lat_global),
+                "lon": str(lon_global),
                 "status": "Pendente",
                 "foto_1": f1_str,
                 "foto_2": f2_str,
@@ -204,18 +210,20 @@ if menu == "Nova Inspeção":
                 id_atual = len(df_existente) + 1
                 
                 for item in st.session_state.carrinho_desvios:
-                    item["id"] = id_atual
+                    item["id"] = str(id_atual)
                     novos_itens.append(item)
                     id_atual += 1
                 
-                df_novos = pd.DataFrame(novos_itens)
+                df_novos = pd.DataFrame(novos_itens).astype(str)
                 
-                # Força o pandas a alinhar exatamente pelas colunas existentes da planilha original
-                # Isso impede a criação de colunas duplicadas
-                df_novos = df_novos.reindex(columns=df_existente.columns)
+                # Garante que as colunas fiquem na ordem exata definida originalmente
+                colunas_padrao = ["id", "local", "categoria", "descricao", "nr", "recomendacao", "prazo", "responsavel", "lat", "lon", "status", "foto_1", "foto_2", "foto_3"]
+                df_existente = df_existente.reindex(columns=colunas_padrao, fill_value="")
+                df_novos = df_novos.reindex(columns=colunas_padrao, fill_value="")
                 
                 df_final = pd.concat([df_existente, df_novos], ignore_index=True)
                 
+                # Envia limpando qualquer formatação de célula bugada
                 conn.update(data=df_final)
                 st.success(f"✅ Sucesso! {len(novos_itens)} desvios salvos corretamente!")
                 st.session_state.carrinho_desvios = []
@@ -227,72 +235,75 @@ if menu == "Nova Inspeção":
 elif menu == "Painel de Gestão (Plano de Ação)":
     st.header("📊 Painel de Controle e Plano de Ação")
     
-    if df_existente.empty or len(df_existente.columns) < 2:
+    if df_existente.empty or len(df_existente) == 0 or "id" not in df_existente.columns:
         st.info("Nenhuma não conformidade registrada até o momento.")
     else:
         status_filtro = st.multiselect("Filtrar por Status:", ["Pendente", "Em Andamento", "Concluído"], default=["Pendente", "Em Andamento", "Concluído"])
         df_filtrado = df_existente[df_existente["status"].isin(status_filtro)]
         
-        st.dataframe(
-            df_filtrado[["id", "local", "categoria", "nr", "prazo", "responsavel", "status"]],
-            use_container_width=True, index=False
-        )
-        
-        st.markdown("---")
-        st.subheader("🗺️ Mapa de Riscos / Ocorrências")
-        try:
-            mapa = folium.Map(location=[float(df_filtrado["lat"].mean()), float(df_filtrado["lon"].mean())], zoom_start=12)
-            for idx, row in df_filtrado.iterrows():
-                folium.Marker(
-                    [float(row["lat"]), float(row["lon"])],
-                    popup=f"<b>Local:</b> {row['local']}<br><b>Status:</b> {row['status']}"
-                ).add_to(mapa)
-            st_folium(mapa, width=1000, height=400)
-        except Exception:
-            st.warning("Sem coordenadas válidas para exibir o mapa.")
-
-        st.markdown("---")
-        st.subheader("🔍 Ações e Detalhes da Ocorrência")
-        id_selecionado = st.selectbox("Escolha o ID para ver detalhes:", df_filtrado["id"])
-        
-        if id_selecionado:
-            detalhe = df_existente[df_existente["id"] == id_selecionado].iloc[0]
-            idx_original = df_existente[df_existente["id"] == id_selecionado].index[0]
+        if df_filtrado.empty:
+            st.info("Nenhum registro encontrado para os filtros selecionados.")
+        else:
+            st.dataframe(
+                df_filtrado[["id", "local", "categoria", "nr", "prazo", "responsavel", "status"]],
+                use_container_width=True, index=False
+            )
             
-            col_det1, col_det2 = st.columns(2)
-            with col_det1:
-                st.write(f"**📍 Local:** {detalhe['local']}")
-                st.write(f"**⚠️ Risco:** {detalhe['categoria']}")
-                st.write(f"**⚖️ Enquadramento:** {detalhe['nr']}")
-                st.write(f"**📝 Descrição:** {detalhe['descricao']}")
-                st.write(f"**📅 Prazo:** {detalhe['prazo']}")
+            st.markdown("---")
+            st.subheader("🗺️ Mapa de Riscos / Ocorrências")
+            try:
+                mapa = folium.Map(location=[float(df_filtrado["lat"].astype(float).mean()), float(df_filtrado["lon"].astype(float).mean())], zoom_start=12)
+                for idx, row in df_filtrado.iterrows():
+                    folium.Marker(
+                        [float(row["lat"]), float(row["lon"])],
+                        popup=f"<b>Local:</b> {row['local']}<br><b>Status:</b> {row['status']}"
+                    ).add_to(mapa)
+                st_folium(mapa, width=1000, height=400)
+            except Exception:
+                st.warning("Sem coordenadas válidas para exibir o mapa.")
+
+            st.markdown("---")
+            st.subheader("🔍 Ações e Detalhes da Ocorrência")
+            id_selecionado = st.selectbox("Escolha o ID para ver detalhes:", df_filtrado["id"].unique())
+            
+            if id_selecionado:
+                detalhe = df_existente[df_existente["id"] == str(id_selecionado)].iloc[0]
+                idx_original = df_existente[df_existente["id"] == str(id_selecionado)].index[0]
                 
-                for i in range(1, 4):
-                    campo_f = f"foto_{i}"
-                    if campo_f in detalhe and detalhe[campo_f] and str(detalhe[campo_f]).strip() != "":
-                        st.markdown(f"**Visualização da Foto {i}:**")
-                        try:
-                            st.image(base64.b64decode(detalhe[campo_f]), width=300)
-                        except:
-                            st.caption("Erro ao processar imagem.")
-                
-            with col_det2:
-                novo_status = st.selectbox("Atualizar status:", ["Pendente", "Em Andamento", "Concluído"], index=["Pendente", "Em Andamento", "Concluído"].index(detalhe["status"]))
-                if st.button("Atualizar Status"):
-                    df_existente.at[idx_original, "status"] = novo_status
-                    conn.update(data=df_existente)
-                    st.success("Status atualizado!")
-                    st.rerun()
-                
-                st.markdown("---")
-                st.markdown("**Gerar Relatório Técnico:**")
-                try:
-                    pdf_bytes = gerar_pdf_inspecao(detalhe)
-                    st.download_button(
-                        label="📥 Descarregar Relatório em PDF",
-                        data=bytes(pdf_bytes),
-                        file_name=f"Relatorio_Inspecao_SST_ID_{id_selecionado}.pdf",
-                        mime="application/pdf"
-                    )
-                except Exception as e:
-                    st.error(f"Erro ao gerar PDF: {e}")
+                col_det1, col_det2 = st.columns(2)
+                with col_det1:
+                    st.write(f"**📍 Local:** {detalhe['local']}")
+                    st.write(f"**⚠️ Risco:** {detalhe['categoria']}")
+                    st.write(f"**⚖️ Enquadramento:** {detalhe['nr']}")
+                    st.write(f"**📝 Descrição:** {detalhe['descricao']}")
+                    st.write(f"**📅 Prazo:** {detalhe['prazo']}")
+                    
+                    for i in range(1, 4):
+                        campo_f = f"foto_{i}"
+                        if campo_f in detalhe and detalhe[campo_f] and str(detalhe[campo_f]).strip() not in ["", "nan", "None"]:
+                            st.markdown(f"**Visualização da Foto {i}:**")
+                            try:
+                                st.image(base64.b64decode(detalhe[campo_f]), width=300)
+                            except:
+                                st.caption("Erro ao processar imagem.")
+                    
+                with col_det2:
+                    novo_status = st.selectbox("Atualizar status:", ["Pendente", "Em Andamento", "Concluído"], index=["Pendente", "Em Andamento", "Concluído"].index(detalhe["status"]))
+                    if st.button("Atualizar Status"):
+                        df_existente.at[idx_original, "status"] = novo_status
+                        conn.update(data=df_existente)
+                        st.success("Status atualizado!")
+                        st.rerun()
+                    
+                    st.markdown("---")
+                    st.markdown("**Gerar Relatório Técnico:**")
+                    try:
+                        pdf_bytes = gerar_pdf_inspecao(detalhe)
+                        st.download_button(
+                            label="📥 Descarregar Relatório em PDF",
+                            data=bytes(pdf_bytes),
+                            file_name=f"Relatorio_Inspecao_SST_ID_{id_selecionado}.pdf",
+                            mime="application/pdf"
+                        )
+                    except Exception as e:
+                        st.error(f"Erro ao gerar PDF: {e}")
