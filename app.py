@@ -6,6 +6,7 @@ from streamlit_gsheets import GSheetsConnection
 from fpdf import FPDF
 import base64
 import io
+from PIL import Image
 
 # Configuração da página
 st.set_page_config(page_title="SST Inspeções Pro", page_icon="🛡️", layout="wide")
@@ -14,9 +15,8 @@ st.set_page_config(page_title="SST Inspeções Pro", page_icon="🛡️", layout
 try:
     conn = st.connection("gsheets", type=GSheetsConnection)
     df_existente = conn.read(ttl=0)
-    # Garante que seja um DataFrame limpo e transforma todas as colunas em strings para evitar erros de tipo
     df_existente = pd.DataFrame(df_existente).astype(str)
-    # Se a planilha vier vazia ou sem colunas básicas, define a estrutura padrão
+    
     if df_existente.empty or "id" not in df_existente.columns:
         df_existente = pd.DataFrame(columns=[
             "id", "local", "categoria", "descricao", "nr", "recomendacao", 
@@ -54,11 +54,40 @@ DICIONARIO_NRS = {
     }
 }
 
-# --- FUNÇÃO PARA CONVERTER IMAGEM PARA BASE64 ---
-def converter_imagem_para_base64(uploaded_file):
+# --- FUNÇÃO PARA COMPRIMIR E CONVERTER IMAGEM PARA BASE64 ---
+def processar_e_converter_imagem(uploaded_file):
     if uploaded_file is not None:
-        bytes_data = uploaded_file.getvalue()
-        return base64.b64encode(bytes_data).decode()
+        try:
+            # Abre a imagem usando PIL
+            img = Image.open(uploaded_file)
+            
+            # Converte para RGB caso esteja em outro formato (ex: RGBA/PNG transparente)
+            if img.mode in ("RGBA", "P"):
+                img = img.convert("RGB")
+            
+            # Redimensiona mantendo o aspecto (máximo de 800px de largura/altura)
+            # Isso reduz drasticamente os pixels mantendo excelente qualidade visual
+            img.thumbnail((800, 800))
+            
+            # Salva na memória com compressão JPEG otimizada
+            buffer = io.BytesIO()
+            img.save(buffer, format="JPEG", quality=60, optimize=True)
+            bytes_data = buffer.getvalue()
+            
+            # Codifica em base64
+            string_b64 = base64.b64encode(bytes_data).decode()
+            
+            # Alerta caso ultrapasse o limite de segurança do Google Sheets (raro após compressão)
+            if len(string_b64) > 48000:
+                # Se ainda passar, reduz ainda mais a qualidade
+                buffer_mini = io.BytesIO()
+                img.save(buffer_mini, format="JPEG", quality=35, optimize=True)
+                string_b64 = base64.b64encode(buffer_mini.getvalue()).decode()
+                
+            return string_b64
+        except Exception as e:
+            st.error(f"Erro ao processar imagem: {e}")
+            return ""
     return ""
 
 # --- FUNÇÃO PARA GERAR RELATÓRIO PDF ---
@@ -171,9 +200,10 @@ if menu == "Nova Inspeção":
         elif not descricao:
             st.error("Preencha a descrição do desvio!")
         else:
-            f1_str = converter_imagem_para_base64(foto1)
-            f2_str = converter_imagem_para_base64(foto2)
-            f3_str = converter_imagem_para_base64(foto3)
+            # Chame a nova função que processa e comprime antes de converter para Base64
+            f1_str = processar_e_converter_imagem(foto1)
+            f2_str = processar_e_converter_imagem(foto2)
+            f3_str = processar_e_converter_imagem(foto3)
             
             st.session_state.carrinho_desvios.append({
                 "local": str(local_global),
@@ -216,14 +246,12 @@ if menu == "Nova Inspeção":
                 
                 df_novos = pd.DataFrame(novos_itens).astype(str)
                 
-                # Garante que as colunas fiquem na ordem exata definida originalmente
                 colunas_padrao = ["id", "local", "categoria", "descricao", "nr", "recomendacao", "prazo", "responsavel", "lat", "lon", "status", "foto_1", "foto_2", "foto_3"]
                 df_existente = df_existente.reindex(columns=colunas_padrao, fill_value="")
                 df_novos = df_novos.reindex(columns=colunas_padrao, fill_value="")
                 
                 df_final = pd.concat([df_existente, df_novos], ignore_index=True)
                 
-                # Envia limpando qualquer formatação de célula bugada
                 conn.update(data=df_final)
                 st.success(f"✅ Sucesso! {len(novos_itens)} desvios salvos corretamente!")
                 st.session_state.carrinho_desvios = []
