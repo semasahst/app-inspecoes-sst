@@ -249,7 +249,7 @@ if menu == "Nova Inspeção":
                 
                 # Conecta ao cliente gspread diretamente
                 # O conn.client acessa o objeto do gspread que o streamlit autenticou
-                sheet = conn.client.open_by_url("SUA_URL_DA_PLANILHA_AQUI").sheet1
+                sheet = conn.client.open_by_url("https://docs.google.com/spreadsheets/d/10ki-TO3hV_UaO1PWGNxJGcUTR-LqVUIeSdsGGYOmGBY/edit?gid=0#gid=0").sheet1
                 
                 # Adiciona as novas linhas ao final da planilha
                 for _, row in df_novos.iterrows():
