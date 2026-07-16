@@ -233,45 +233,33 @@ if menu == "Nova Inspeção":
                 st.session_state.carrinho_desvios = []
                 st.rerun()
         with col_btn2:
-           if st.button("🚀 ENVIAR TODOS OS DESVIOS PARA A PLANILHA"):
-                # ... (manter seu cálculo de novos_itens e df_novos aqui) ...
+           with col_btn2:
+            if st.button("🚀 ENVIAR TODOS OS DESVIOS PARA A PLANILHA"):
+                novos_itens = []
+                id_atual = 1
+                if not df_existente.empty:
+                    df_existente["id"] = pd.to_numeric(df_existente["id"], errors='coerce')
+                    id_atual = int(df_existente["id"].max()) + 1
                 
+                for item in st.session_state.carrinho_desvios:
+                    item["id"] = str(id_atual)
+                    novos_itens.append(item)
+                    id_atual += 1
+                
+                df_novos = pd.DataFrame(novos_itens)
                 df_final = pd.concat([df_existente, df_novos], ignore_index=True)
                 
                 # LIMPEZA OBRIGATÓRIA ANTES DO ENVIO
-                # 1. Transformar tudo em string
-                df_final = df_final.astype(str)
-                # 2. Remover qualquer valor NaN ou None que causa erro na API
-                df_final = df_final.replace(['nan', 'None', None], '')
+                df_final = df_final.astype(str).replace(['nan', 'None', None], '')
                 
-                # TENTATIVA OFICIAL
                 try:
-                    # Tente apenas o data. Se falhar, o problema é a permissão da Service Account
+                    # Usamos apenas o data para evitar erros de worksheet ou operação
                     conn.update(data=df_final)
-                    st.success("✅ Enviado!")
+                    st.success(f"✅ Sucesso! {len(novos_itens)} desvios salvos!")
                     st.session_state.carrinho_desvios = []
                     st.rerun()
                 except Exception as e:
-                    st.error(f"Erro na API do Google: {e}")
-                except Exception as e:
                     st.error(f"Erro ao gravar no Google Sheets: {e}")
-                
-                colunas_padrao = ["id", "local", "categoria", "descricao", "nr", "recomendacao", "prazo", "responsavel", "lat", "lon", "status", "foto_1", "foto_2", "foto_3"]
-                df_existente = df_existente.reindex(columns=colunas_padrao, fill_value="")
-                df_novos = df_novos.reindex(columns=colunas_padrao, fill_value="")
-                
-                df_final = pd.concat([df_existente, df_novos], ignore_index=True)
-                
-                # Para evitar erros de conversão do Pandas DataFrame de volta para a planilha,
-                # limpamos valores nulos e garantimos que tudo seja enviado como string nativa limpa
-                df_final = df_final.fillna("")
-
-                st.write(dir(conn)) # Isso mostrará todos os métodos disponíveis para o objeto conn
-                conn.update(worksheet="Inspeções", data=df_final)
-                st.success(f"✅ Sucesso! {len(novos_itens)} desvios salvos corretamente!")
-                st.session_state.carrinho_desvios = []
-                st.rerun()
-
 # ------------------------------------------------------------------
 # TELA 2: PAINEL DE GESTÃO
 # ------------------------------------------------------------------
