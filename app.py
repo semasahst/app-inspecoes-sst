@@ -255,7 +255,7 @@ if menu == "Nova Inspeção":
                 df_final = df_final.fillna("")
 
                 st.write(dir(conn)) # Isso mostrará todos os métodos disponíveis para o objeto conn
-                conn.write(worksheet="Inspeções", data=df_final)
+               conn.update(worksheet="Inspeções", data=df_final)
                 st.success(f"✅ Sucesso! {len(novos_itens)} desvios salvos corretamente!")
                 st.session_state.carrinho_desvios = []
                 st.rerun()
