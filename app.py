@@ -237,23 +237,29 @@ if menu == "Nova Inspeção":
                 novos_itens = []
                 id_atual = 1
                 if not df_existente.empty:
-                    id_atual = int(pd.to_numeric(df_existente["id"], errors='coerce').max()) + 1
+                    # Converte para numérico de forma segura para evitar erros
+                    df_existente["id"] = pd.to_numeric(df_existente["id"], errors='coerce')
+                    id_atual = int(df_existente["id"].max()) + 1
                 
                 for item in st.session_state.carrinho_desvios:
                     item["id"] = str(id_atual)
                     novos_itens.append(item)
                     id_atual += 1
                 
-                # Prepara os dados apenas com as novas linhas
+                # Criamos um DataFrame novo apenas com os dados a adicionar
                 df_novos = pd.DataFrame(novos_itens)
                 
-                # Conecta ao cliente gspread diretamente
-                # O conn.client acessa o objeto do gspread que o streamlit autenticou
-                sheet = conn.client.open_by_url("https://docs.google.com/spreadsheets/d/10ki-TO3hV_UaO1PWGNxJGcUTR-LqVUIeSdsGGYOmGBY/edit?gid=0#gid=0").sheet1
+                # O MÉTODO CORRETO E SEGURO:
+                # O conn.read() lê, e o conn.update() sobrescreve. 
+                # Como o seu df_final contém os dados antigos + novos, 
+                # o update sobrescreverá tudo com a lista completa e atualizada.
                 
-                # Adiciona as novas linhas ao final da planilha
-                for _, row in df_novos.iterrows():
-                    sheet.append_row(row.tolist())
+                # Certifique-se de que o df_final esteja com todas as colunas formatadas como string
+                df_final = pd.concat([df_existente, df_novos], ignore_index=True).astype(str)
+                df_final = df_final.fillna("")
+                
+                # Comando oficial sem usar .client ou .append
+                conn.update(data=df_final)
                 
                 st.success(f"✅ Sucesso! {len(novos_itens)} desvios enviados!")
                 st.session_state.carrinho_desvios = []
