@@ -4,3 +4,4 @@ folium
 streamlit-folium
 st-gsheets-connection
 fpdf2
+Pillow
