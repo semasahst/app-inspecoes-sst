@@ -2,7 +2,7 @@ streamlit
 pandas
 folium
 streamlit-folium
-st-gsheets-connection
+streamlit-gsheets
 fpdf2
 Pillow
 gspread
