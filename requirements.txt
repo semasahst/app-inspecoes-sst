@@ -1,7 +1,4 @@
 streamlit
 pandas
-folium
-streamlit-folium
 streamlit-gsheets
-fpdf2
 Pillow
