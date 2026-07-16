@@ -235,27 +235,27 @@ if menu == "Nova Inspeção":
         with col_btn2:
             if st.button("🚀 ENVIAR TODOS OS DESVIOS PARA A PLANILHA"):
                 novos_itens = []
-                # Ajuste para pegar o último ID corretamente
                 id_atual = 1
                 if not df_existente.empty:
-                    id_atual = int(df_existente["id"].max()) + 1
+                    id_atual = int(pd.to_numeric(df_existente["id"], errors='coerce').max()) + 1
                 
                 for item in st.session_state.carrinho_desvios:
                     item["id"] = str(id_atual)
                     novos_itens.append(item)
                     id_atual += 1
                 
-                df_novos = pd.DataFrame(novos_itens).astype(str)
+                # Prepara os dados apenas com as novas linhas
+                df_novos = pd.DataFrame(novos_itens)
                 
-                # Concatena mantendo apenas as colunas necessárias
-                df_final = pd.concat([df_existente, df_novos], ignore_index=True)
-                df_final = df_final.fillna("")
+                # Conecta ao cliente gspread diretamente
+                # O conn.client acessa o objeto do gspread que o streamlit autenticou
+                sheet = conn.client.open_by_url("SUA_URL_DA_PLANILHA_AQUI").sheet1
                 
-                # A forma correta de atualizar sem o erro UnsupportedOperationError
-                # é passar apenas o data, mantendo a conexão padrão
-                conn.update(data=df_final)
+                # Adiciona as novas linhas ao final da planilha
+                for _, row in df_novos.iterrows():
+                    sheet.append_row(row.tolist())
                 
-                st.success(f"✅ Sucesso! {len(novos_itens)} desvios salvos corretamente!")
+                st.success(f"✅ Sucesso! {len(novos_itens)} desvios enviados!")
                 st.session_state.carrinho_desvios = []
                 st.rerun()
                 
