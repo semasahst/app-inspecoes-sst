@@ -254,7 +254,7 @@ if menu == "Nova Inspeção":
                 # limpamos valores nulos e garantimos que tudo seja enviado como string nativa limpa
                 df_final = df_final.fillna("")
                 
-                conn.append(data=df_final)
+                conn.update(worksheet="Inspeções", data=df_final)
                 st.success(f"✅ Sucesso! {len(novos_itens)} desvios salvos corretamente!")
                 st.session_state.carrinho_desvios = []
                 st.rerun()
