@@ -234,36 +234,25 @@ if menu == "Nova Inspeção":
                 st.rerun()
         with col_btn2:
            if st.button("🚀 ENVIAR TODOS OS DESVIOS PARA A PLANILHA"):
-                import gspread # Importe aqui ou no topo do arquivo
-
-                # 1. Preparar os dados
-                novos_itens = []
-                id_atual = 1
-                if not df_existente.empty:
-                    df_existente["id"] = pd.to_numeric(df_existente["id"], errors='coerce')
-                    id_atual = int(df_existente["id"].max()) + 1
+                # ... (manter seu cálculo de novos_itens e df_novos aqui) ...
                 
-                for item in st.session_state.carrinho_desvios:
-                    item["id"] = str(id_atual)
-                    novos_itens.append(item)
-                    id_atual += 1
+                df_final = pd.concat([df_existente, df_novos], ignore_index=True)
                 
-                df_novos = pd.DataFrame(novos_itens)
-
-                # 2. Conectar e Escrever usando gspread diretamente
-                # O conn._raw_instance dá acesso ao objeto de autenticação configurado
+                # LIMPEZA OBRIGATÓRIA ANTES DO ENVIO
+                # 1. Transformar tudo em string
+                df_final = df_final.astype(str)
+                # 2. Remover qualquer valor NaN ou None que causa erro na API
+                df_final = df_final.replace(['nan', 'None', None], '')
+                
+                # TENTATIVA OFICIAL
                 try:
-                    gc = conn._raw_instance
-                    spreadsheet = gc.open_by_url("https://docs.google.com/spreadsheets/d/10ki-TO3hV_UaO1PWGNxJGcUTR-LqVUIeSdsGGYOmGBY/edit")
-                    sheet = spreadsheet.sheet1
-                    
-                    # Adicionar cada linha nova
-                    for _, row in df_novos.iterrows():
-                        sheet.append_row(row.tolist())
-                    
-                    st.success(f"✅ Sucesso! {len(novos_itens)} desvios enviados!")
+                    # Tente apenas o data. Se falhar, o problema é a permissão da Service Account
+                    conn.update(data=df_final)
+                    st.success("✅ Enviado!")
                     st.session_state.carrinho_desvios = []
                     st.rerun()
+                except Exception as e:
+                    st.error(f"Erro na API do Google: {e}")
                 except Exception as e:
                     st.error(f"Erro ao gravar no Google Sheets: {e}")
                 
