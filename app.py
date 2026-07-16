@@ -233,11 +233,13 @@ if menu == "Nova Inspeção":
                 st.session_state.carrinho_desvios = []
                 st.rerun()
         with col_btn2:
-            if st.button("🚀 ENVIAR TODOS OS DESVIOS PARA A PLANILHA"):
+           if st.button("🚀 ENVIAR TODOS OS DESVIOS PARA A PLANILHA"):
+                import gspread # Importe aqui ou no topo do arquivo
+
+                # 1. Preparar os dados
                 novos_itens = []
                 id_atual = 1
                 if not df_existente.empty:
-                    # Converte para numérico de forma segura para evitar erros
                     df_existente["id"] = pd.to_numeric(df_existente["id"], errors='coerce')
                     id_atual = int(df_existente["id"].max()) + 1
                 
@@ -246,24 +248,24 @@ if menu == "Nova Inspeção":
                     novos_itens.append(item)
                     id_atual += 1
                 
-                # Criamos um DataFrame novo apenas com os dados a adicionar
                 df_novos = pd.DataFrame(novos_itens)
-                
-                # O MÉTODO CORRETO E SEGURO:
-                # O conn.read() lê, e o conn.update() sobrescreve. 
-                # Como o seu df_final contém os dados antigos + novos, 
-                # o update sobrescreverá tudo com a lista completa e atualizada.
-                
-                # Certifique-se de que o df_final esteja com todas as colunas formatadas como string
-                df_final = pd.concat([df_existente, df_novos], ignore_index=True).astype(str)
-                df_final = df_final.fillna("")
-                
-                # Comando oficial sem usar .client ou .append
-                conn.update(data=df_final)
-                
-                st.success(f"✅ Sucesso! {len(novos_itens)} desvios enviados!")
-                st.session_state.carrinho_desvios = []
-                st.rerun()
+
+                # 2. Conectar e Escrever usando gspread diretamente
+                # O conn._raw_instance dá acesso ao objeto de autenticação configurado
+                try:
+                    gc = conn._raw_instance
+                    spreadsheet = gc.open_by_url("https://docs.google.com/spreadsheets/d/10ki-TO3hV_UaO1PWGNxJGcUTR-LqVUIeSdsGGYOmGBY/edit")
+                    sheet = spreadsheet.sheet1
+                    
+                    # Adicionar cada linha nova
+                    for _, row in df_novos.iterrows():
+                        sheet.append_row(row.tolist())
+                    
+                    st.success(f"✅ Sucesso! {len(novos_itens)} desvios enviados!")
+                    st.session_state.carrinho_desvios = []
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Erro ao gravar no Google Sheets: {e}")
                 
                 colunas_padrao = ["id", "local", "categoria", "descricao", "nr", "recomendacao", "prazo", "responsavel", "lat", "lon", "status", "foto_1", "foto_2", "foto_3"]
                 df_existente = df_existente.reindex(columns=colunas_padrao, fill_value="")
