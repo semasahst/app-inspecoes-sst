@@ -235,7 +235,10 @@ if menu == "Nova Inspeção":
         with col_btn2:
             if st.button("🚀 ENVIAR TODOS OS DESVIOS PARA A PLANILHA"):
                 novos_itens = []
-                id_atual = len(df_existente) + 1
+                # Ajuste para pegar o último ID corretamente
+                id_atual = 1
+                if not df_existente.empty:
+                    id_atual = int(df_existente["id"].max()) + 1
                 
                 for item in st.session_state.carrinho_desvios:
                     item["id"] = str(id_atual)
@@ -243,6 +246,18 @@ if menu == "Nova Inspeção":
                     id_atual += 1
                 
                 df_novos = pd.DataFrame(novos_itens).astype(str)
+                
+                # Concatena mantendo apenas as colunas necessárias
+                df_final = pd.concat([df_existente, df_novos], ignore_index=True)
+                df_final = df_final.fillna("")
+                
+                # A forma correta de atualizar sem o erro UnsupportedOperationError
+                # é passar apenas o data, mantendo a conexão padrão
+                conn.update(data=df_final)
+                
+                st.success(f"✅ Sucesso! {len(novos_itens)} desvios salvos corretamente!")
+                st.session_state.carrinho_desvios = []
+                st.rerun())
                 
                 colunas_padrao = ["id", "local", "categoria", "descricao", "nr", "recomendacao", "prazo", "responsavel", "lat", "lon", "status", "foto_1", "foto_2", "foto_3"]
                 df_existente = df_existente.reindex(columns=colunas_padrao, fill_value="")
