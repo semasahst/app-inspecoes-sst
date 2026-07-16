@@ -5,8 +5,3 @@ streamlit-folium
 streamlit-gsheets
 fpdf2
 Pillow
-gspread
-oauth2client
-google-auth
-google-auth-oauthlib
-google-auth-httplib2
