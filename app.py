@@ -257,7 +257,7 @@ if menu == "Nova Inspeção":
                 
                 st.success(f"✅ Sucesso! {len(novos_itens)} desvios salvos corretamente!")
                 st.session_state.carrinho_desvios = []
-                st.rerun())
+                st.rerun()
                 
                 colunas_padrao = ["id", "local", "categoria", "descricao", "nr", "recomendacao", "prazo", "responsavel", "lat", "lon", "status", "foto_1", "foto_2", "foto_3"]
                 df_existente = df_existente.reindex(columns=colunas_padrao, fill_value="")
