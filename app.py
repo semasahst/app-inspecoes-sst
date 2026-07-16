@@ -253,7 +253,8 @@ if menu == "Nova Inspeção":
                 # Para evitar erros de conversão do Pandas DataFrame de volta para a planilha,
                 # limpamos valores nulos e garantimos que tudo seja enviado como string nativa limpa
                 df_final = df_final.fillna("")
-                
+
+                st.write(dir(conn)) # Isso mostrará todos os métodos disponíveis para o objeto conn
                 conn.write(worksheet="Inspeções", data=df_final)
                 st.success(f"✅ Sucesso! {len(novos_itens)} desvios salvos corretamente!")
                 st.session_state.carrinho_desvios = []
