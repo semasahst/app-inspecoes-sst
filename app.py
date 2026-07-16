@@ -61,27 +61,26 @@ def processar_e_converter_imagem(uploaded_file):
             # Abre a imagem usando PIL
             img = Image.open(uploaded_file)
             
-            # Converte para RGB caso esteja em outro formato (ex: RGBA/PNG transparente)
+            # Converte para RGB caso esteja em outro formato (ex: RGBA)
             if img.mode in ("RGBA", "P"):
                 img = img.convert("RGB")
             
-            # Redimensiona mantendo o aspecto (máximo de 800px de largura/altura)
-            # Isso reduz drasticamente os pixels mantendo excelente qualidade visual
-            img.thumbnail((800, 800))
+            # Redimensiona mantendo o aspecto (máximo de 600px de largura/altura para caber com folga no Sheets)
+            img.thumbnail((600, 600))
             
-            # Salva na memória com compressão JPEG otimizada
+            # Salva na memória com altíssima compressão JPEG
             buffer = io.BytesIO()
-            img.save(buffer, format="JPEG", quality=60, optimize=True)
+            img.save(buffer, format="JPEG", quality=40, optimize=True)
             bytes_data = buffer.getvalue()
             
             # Codifica em base64
             string_b64 = base64.b64encode(bytes_data).decode()
             
-            # Alerta caso ultrapasse o limite de segurança do Google Sheets (raro após compressão)
-            if len(string_b64) > 48000:
-                # Se ainda passar, reduz ainda mais a qualidade
+            # Limite rígido de segurança para evitar quebras de API do Google (máx 50k caracteres)
+            if len(string_b64) > 45000:
                 buffer_mini = io.BytesIO()
-                img.save(buffer_mini, format="JPEG", quality=35, optimize=True)
+                img.thumbnail((400, 400))
+                img.save(buffer_mini, format="JPEG", quality=25, optimize=True)
                 string_b64 = base64.b64encode(buffer_mini.getvalue()).decode()
                 
             return string_b64
@@ -200,7 +199,6 @@ if menu == "Nova Inspeção":
         elif not descricao:
             st.error("Preencha a descrição do desvio!")
         else:
-            # Chame a nova função que processa e comprime antes de converter para Base64
             f1_str = processar_e_converter_imagem(foto1)
             f2_str = processar_e_converter_imagem(foto2)
             f3_str = processar_e_converter_imagem(foto3)
@@ -251,6 +249,10 @@ if menu == "Nova Inspeção":
                 df_novos = df_novos.reindex(columns=colunas_padrao, fill_value="")
                 
                 df_final = pd.concat([df_existente, df_novos], ignore_index=True)
+                
+                # Para evitar erros de conversão do Pandas DataFrame de volta para a planilha,
+                # limpamos valores nulos e garantimos que tudo seja enviado como string nativa limpa
+                df_final = df_final.fillna("")
                 
                 conn.update(data=df_final)
                 st.success(f"✅ Sucesso! {len(novos_itens)} desvios salvos corretamente!")
@@ -319,8 +321,9 @@ elif menu == "Painel de Gestão (Plano de Ação)":
                     novo_status = st.selectbox("Atualizar status:", ["Pendente", "Em Andamento", "Concluído"], index=["Pendente", "Em Andamento", "Concluído"].index(detalhe["status"]))
                     if st.button("Atualizar Status"):
                         df_existente.at[idx_original, "status"] = novo_status
+                        df_existente = df_existente.fillna("")
                         conn.update(data=df_existente)
-                        st.success("Status atualizado!")
+                        st.success("Status updated successfully!")
                         st.rerun()
                     
                     st.markdown("---")
