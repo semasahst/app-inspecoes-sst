@@ -91,6 +91,13 @@ if menu == "Nova Inspeção":
         st.toast("Adicionado!")
 
  iif st.session_state.carrinho_desvios:
+for item in st.session_state.carrinho_desvios:
+    # Removemos o ID antes de enviar, permitindo que o Supabase (Identity) gere o valor
+    if "id" in item:
+        del item["id"]
+    
+    # ... resto do seu código de envio ...
+    supabase.table("inspecoes").insert(item_filtrado).execute()       
         st.markdown("---")
         st.subheader(f"📋 Desvios aguardando envio ({len(st.session_state.carrinho_desvios)})")
         
