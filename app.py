@@ -1,11 +1,13 @@
 import streamlit as st
-from supabase import create_client, Client
+import pandas as pd
+from supabase import create_client, Client # Certifique-se que supabase está no requirements.txt [cite: 151]
 
-# Inicialização da conexão
-# Agora o 'st' estará definido e o app não vai quebrar
+# Inicialização da conexão com Supabase
 url: str = st.secrets["SUPABASE_URL"]
 key: str = st.secrets["SUPABASE_KEY"]
 supabase: Client = create_client(url, key)
+
+# ... restante do seu código (sem o try/except do gsheets) ...
 
 # Para ler os dados (substitui o seu antigo conn.read)
 def ler_dados():
