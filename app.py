@@ -90,29 +90,43 @@ if menu == "Nova Inspeção":
         })
         st.toast("Adicionado!")
 
- if st.session_state.carrinho_desvios:
-        if st.button("🚀 ENVIAR TODOS OS DESVIOS PARA O SUPABASE"):
-            try:
-                for item in st.session_state.carrinho_desvios:
-                    # 1. Se o ID estiver vazio, removemos para o Supabase gerar automaticamente
-                    if "id" in item and (item["id"] is None or item["id"] == ""):
-                        del item["id"]
-                    
-                    # 2. Filtramos apenas as colunas que realmente existem na sua tabela
-                    colunas_banco = [
-                        "local", "categoria", "descricao", "nr", "recomendacao", 
-                        "prazo", "responsavel", "lat", "lon", "status", "foto_1", "foto_2", "foto_3"
-                    ]
-                    item_filtrado = {k: v for k, v in item.items() if k in colunas_banco}
-                    
-                    # 3. Executamos a inserção
-                    supabase.table("inspecoes").insert(item_filtrado).execute()
-                
-                st.success("✅ Enviado com sucesso!")
+ iif st.session_state.carrinho_desvios:
+        st.markdown("---")
+        st.subheader(f"📋 Desvios aguardando envio ({len(st.session_state.carrinho_desvios)})")
+        
+        df_carrinho = pd.DataFrame(st.session_state.carrinho_desvios)
+        st.dataframe(df_carrinho, use_container_width=True)
+        
+        col_btn1, col_btn2 = st.columns([1, 5])
+        
+        with col_btn1:
+            if st.button("🔥 Limpar Fila"):
                 st.session_state.carrinho_desvios = []
                 st.rerun()
-            except Exception as e:
-                st.error(f"Erro detalhado do Supabase: {e}")
+                
+        with col_btn2:
+            if st.button("🚀 ENVIAR TODOS OS DESVIOS PARA O SUPABASE"):
+                try:
+                    for item in st.session_state.carrinho_desvios:
+                        # 1. Removemos o ID se estiver vazio para o Supabase gerar o dele
+                        if "id" in item and (item["id"] is None or item["id"] == ""):
+                            del item["id"]
+                        
+                        # 2. Garantimos que apenas colunas existentes no banco sejam enviadas
+                        colunas_banco = [
+                            "local", "categoria", "descricao", "nr", "recomendacao", 
+                            "prazo", "responsavel", "lat", "lon", "status", "foto_1", "foto_2", "foto_3"
+                        ]
+                        item_filtrado = {k: v for k, v in item.items() if k in colunas_banco}
+                        
+                        # 3. Inserção
+                        supabase.table("inspecoes").insert(item_filtrado).execute()
+                    
+                    st.success("✅ Enviado com sucesso!")
+                    st.session_state.carrinho_desvios = []
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Erro detalhado do Supabase: {e}")
 elif menu == "Painel de Gestão (Plano de Ação)":
     st.header("📊 Painel")
     st.dataframe(df_existente)
