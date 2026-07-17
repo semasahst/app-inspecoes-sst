@@ -90,22 +90,22 @@ if menu == "Nova Inspeção":
         })
         st.toast("Adicionado!")
 
-   if st.button("🚀 ENVIAR TODOS OS DESVIOS PARA O SUPABASE"):
+  if st.session_state.carrinho_desvios:
+        if st.button("🚀 ENVIAR TODOS OS DESVIOS PARA O SUPABASE"):
             try:
                 for item in st.session_state.carrinho_desvios:
-                    # REMOVER ID SE FOR NULO PARA DEIXAR O SUPABASE GERAR
+                    # 1. Se o ID estiver vazio, removemos para o Supabase gerar automaticamente
                     if "id" in item and (item["id"] is None or item["id"] == ""):
                         del item["id"]
                     
-                    # GARANTIR QUE APENAS COLUNAS EXISTENTES SEJAM ENVIADAS
-                    # Liste aqui EXATAMENTE os nomes das colunas que você criou no Supabase
-                    colunas_permitidas = [
+                    # 2. Filtramos apenas as colunas que realmente existem na sua tabela
+                    colunas_banco = [
                         "local", "categoria", "descricao", "nr", "recomendacao", 
                         "prazo", "responsavel", "lat", "lon", "status", "foto_1", "foto_2", "foto_3"
                     ]
-                    item_filtrado = {k: v for k, v in item.items() if k in colunas_permitidas}
+                    item_filtrado = {k: v for k, v in item.items() if k in colunas_banco}
                     
-                    # Enviar para o Supabase
+                    # 3. Executamos a inserção
                     supabase.table("inspecoes").insert(item_filtrado).execute()
                 
                 st.success("✅ Enviado com sucesso!")
@@ -113,7 +113,6 @@ if menu == "Nova Inspeção":
                 st.rerun()
             except Exception as e:
                 st.error(f"Erro detalhado do Supabase: {e}")
-
 elif menu == "Painel de Gestão (Plano de Ação)":
     st.header("📊 Painel")
     st.dataframe(df_existente)
