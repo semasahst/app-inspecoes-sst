@@ -93,7 +93,7 @@ if menu == "Nova Inspeção":
     if st.session_state.carrinho_desvios:
         if st.button("🚀 ENVIAR PARA SUPABASE"):
             for item in st.session_state.carrinho_desvios:
-                supabase.table("inspecoes").insert(item).execute()
+                supabase.table("inspeções").insert(item).execute()
             st.success("Enviado com sucesso!")
             st.session_state.carrinho_desvios = []
             st.rerun()
