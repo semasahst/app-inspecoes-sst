@@ -25,8 +25,9 @@ st.set_page_config(page_title="SST Inspeções Pro", page_icon="🛡️", layout
 
 # --- CONEXÃO NATIVA COM O GOOGLE SHEETS ---
 try:
-    conn = st.connection("gsheets", type=GSheetsConnection)
-    df_existente = conn.read(ttl=0)
+   
+    response = supabase.table("inspecoes").select("*").execute()
+    df = pd.DataFrame(response.data)
     df_existente = pd.DataFrame(df_existente).astype(str)
     
     if df_existente.empty or "id" not in df_existente.columns:
