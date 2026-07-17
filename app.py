@@ -2,9 +2,7 @@ import streamlit as st
 import pandas as pd
 import folium
 from streamlit_folium import st_folium
-conn = st.connection("gsheets", 
-                     type=GSheetsConnection, 
-                     spreadsheet="10ki-TO3hV_UaO1PWGNxJGcUTR-LqVUIeSdsGGYOmGBY")
+conn = st.connection("gsheets", type=GSheetsConnection, spreadsheet="10ki-TO3hV_UaO1PWGNxJGcUTR-LqVUIeSdsGGYOmGBY")
 from fpdf import FPDF
 import base64
 import io
