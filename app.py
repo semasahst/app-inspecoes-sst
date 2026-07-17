@@ -1,12 +1,20 @@
-import streamlit as st
-import pandas as pd
-import folium
-from streamlit_folium import st_folium
-from st_gsheets_connection import GSheetsConnection
-from fpdf import FPDF
-import base64
-import io
-from PIL import Image
+from supabase import create_client, Client
+
+# Inicialização da conexão
+url: str = st.secrets["SUPABASE_URL"]
+key: str = st.secrets["SUPABASE_KEY"]
+supabase: Client = create_client(url, key)
+
+# Para ler os dados (substitui o seu antigo conn.read)
+def ler_dados():
+    response = supabase.table("inspecoes").select("*").execute()
+    return pd.DataFrame(response.data)
+
+# Para inserir dados (substitui o seu antigo conn.update)
+def salvar_dados(df_para_salvar):
+    # Converte o DataFrame para lista de dicionários para o Supabase
+    dados = df_para_salvar.to_dict(orient="records")
+    supabase.table("inspecoes").insert(dados).execute()
 
 # Configuração da página
 st.set_page_config(page_title="SST Inspeções Pro", page_icon="🛡️", layout="wide")
