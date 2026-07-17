@@ -7,6 +7,8 @@ from fpdf import FPDF
 import base64
 import io
 from PIL import Image
+import streamlit_geolocation
+from streamlit_geolocation 
 
 # Configuração da página
 st.set_page_config(page_title="SST Inspeções Pro", page_icon="🛡️", layout="wide")
@@ -72,23 +74,39 @@ def gerar_pdf_inspecao(dados):
 # --- NAVEGAÇÃO ---
 menu = st.sidebar.selectbox("Navegação", ["Nova Inspeção", "Painel de Gestão (Plano de Ação)"])
 
+
 if menu == "Nova Inspeção":
     st.header("📝 Registrar Inspeção em Lote")
-    local_global = st.text_input("Local Geral:")
-    col1, col2 = st.columns(2)
-    with col1:
-        categoria = st.selectbox("Categoria:", list(DICIONARIO_NRS.keys()))
-        descricao = st.text_area("Descrição:")
-    with col2:
-        responsavel = st.text_input("Responsável:")
-        foto1 = st.file_uploader("Foto 1:", type=["png", "jpg"], key="f1")
     
-    if st.button("➕ Adicionar Desvio"):
+    # Geolocalização
+    st.subheader("📍 Dados Globais do Local")
+    if st.button("📍 Capturar minha localização atual"):
+        loc = streamlit_geolocation()
+        if loc:
+            lat_global = loc["latitude"]
+            lon_global = loc["longitude"]
+            st.success(f"Coordenadas capturadas: {lat_global}, {lon_global}")
+        else:
+            st.warning("Não foi possível capturar a localização.")
+    
+    # (Mantenha o resto do formulário...)
+    
+    # Evidências Fotográficas
+    st.subheader("📸 Evidências Fotográficas (Até 3 fotos)")
+    col_foto1, col_foto2, col_foto3 = st.columns(3)
+    with col_foto1: foto1 = st.file_uploader("Foto 1", type=["png", "jpg"], key="f1")
+    with col_foto2: foto2 = st.file_uploader("Foto 2", type=["png", "jpg"], key="f2")
+    with col_foto3: foto3 = st.file_uploader("Foto 3", type=["png", "jpg"], key="f3")
+
+    # Ao salvar no carrinho, garanta que os nomes das chaves batem com o banco
+    if st.button("➕ Adicionar Desvio à Lista"):
         st.session_state.carrinho_desvios.append({
-            "local": local_global, "categoria": categoria, "descricao": descricao,
-            "responsavel": responsavel, "status": "Pendente", "foto_1": processar_e_converter_imagem(foto1)
+            "local": local_global,
+            "foto_1": processar_e_converter_imagem(foto1),
+            "foto_2": processar_e_converter_imagem(foto2),
+            "foto_3": processar_e_converter_imagem(foto3),
+            # ... resto dos campos
         })
-        st.toast("Adicionado!")
 
 if st.session_state.carrinho_desvios:
         st.markdown("---")
