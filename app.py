@@ -1,6 +1,8 @@
+import streamlit as st
 from supabase import create_client, Client
 
 # Inicialização da conexão
+# Agora o 'st' estará definido e o app não vai quebrar
 url: str = st.secrets["SUPABASE_URL"]
 key: str = st.secrets["SUPABASE_KEY"]
 supabase: Client = create_client(url, key)
