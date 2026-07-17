@@ -90,14 +90,7 @@ if menu == "Nova Inspeção":
         })
         st.toast("Adicionado!")
 
- iif st.session_state.carrinho_desvios:
-for item in st.session_state.carrinho_desvios:
-    # Removemos o ID antes de enviar, permitindo que o Supabase (Identity) gere o valor
-    if "id" in item:
-        del item["id"]
-    
-    # ... resto do seu código de envio ...
-    supabase.table("inspecoes").insert(item_filtrado).execute()       
+if st.session_state.carrinho_desvios:
         st.markdown("---")
         st.subheader(f"📋 Desvios aguardando envio ({len(st.session_state.carrinho_desvios)})")
         
@@ -115,11 +108,11 @@ for item in st.session_state.carrinho_desvios:
             if st.button("🚀 ENVIAR TODOS OS DESVIOS PARA O SUPABASE"):
                 try:
                     for item in st.session_state.carrinho_desvios:
-                        # 1. Removemos o ID se estiver vazio para o Supabase gerar o dele
-                        if "id" in item and (item["id"] is None or item["id"] == ""):
+                        # 1. Removemos o ID para o Supabase gerar o dele automaticamente (Identity)
+                        if "id" in item:
                             del item["id"]
                         
-                        # 2. Garantimos que apenas colunas existentes no banco sejam enviadas
+                        # 2. Filtramos apenas as colunas que existem na tabela
                         colunas_banco = [
                             "local", "categoria", "descricao", "nr", "recomendacao", 
                             "prazo", "responsavel", "lat", "lon", "status", "foto_1", "foto_2", "foto_3"
