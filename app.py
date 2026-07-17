@@ -79,14 +79,16 @@ if menu == "Nova Inspeção":
     
     # Geolocalização
    # Use este bloco para a geolocalização:
-if st.button("📍 Capturar minha localização atual"):
-    loc = streamlit_geolocation()
-    if loc and "latitude" in loc and loc["latitude"] is not None:
-        st.session_state.lat_temp = loc["latitude"]
-        st.session_state.lon_temp = loc["longitude"]
-        st.success(f"Localização capturada: {loc['latitude']}, {loc['longitude']}")
-    else:
-        st.error("Permissão negada ou erro ao capturar GPS. Verifique se o navegador permite acesso.")
+# Bloco correto de geolocalização (coloque dentro do "if menu == 'Nova Inspeção':")
+    if st.button("📍 Capturar minha localização atual"):
+        loc = streamlit_geolocation()
+        # Verificamos se o resultado é válido
+        if loc and isinstance(loc, dict) and loc.get("latitude") is not None:
+            st.session_state.lat_temp = loc["latitude"]
+            st.session_state.lon_temp = loc["longitude"]
+            st.success(f"Localização capturada: {loc['latitude']}, {loc['longitude']}")
+        else:
+            st.error("Erro ao capturar GPS. Verifique se o navegador tem permissão.")
     
     # Evidências Fotográficas
     st.subheader("📸 Evidências Fotográficas (Até 3 fotos)")
