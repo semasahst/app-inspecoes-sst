@@ -90,17 +90,23 @@ if menu == "Nova Inspeção":
         })
         st.toast("Adicionado!")
 
-    if st.session_state.carrinho_desvios:
-        if st.button("🚀 ENVIAR TODOS OS DESVIOS PARA O SUPABASE"):
+   if st.button("🚀 ENVIAR TODOS OS DESVIOS PARA O SUPABASE"):
             try:
                 for item in st.session_state.carrinho_desvios:
-                    # Garantir que não estamos enviando um ID nulo se o banco exige um ID
-                    # Se o banco gera o ID automaticamente, remova a linha abaixo
+                    # REMOVER ID SE FOR NULO PARA DEIXAR O SUPABASE GERAR
                     if "id" in item and (item["id"] is None or item["id"] == ""):
                         del item["id"]
                     
+                    # GARANTIR QUE APENAS COLUNAS EXISTENTES SEJAM ENVIADAS
+                    # Liste aqui EXATAMENTE os nomes das colunas que você criou no Supabase
+                    colunas_permitidas = [
+                        "local", "categoria", "descricao", "nr", "recomendacao", 
+                        "prazo", "responsavel", "lat", "lon", "status", "foto_1", "foto_2", "foto_3"
+                    ]
+                    item_filtrado = {k: v for k, v in item.items() if k in colunas_permitidas}
+                    
                     # Enviar para o Supabase
-                    supabase.table("inspecoes").insert(item).execute()
+                    supabase.table("inspecoes").insert(item_filtrado).execute()
                 
                 st.success("✅ Enviado com sucesso!")
                 st.session_state.carrinho_desvios = []
