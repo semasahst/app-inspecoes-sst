@@ -91,12 +91,22 @@ if menu == "Nova Inspeção":
         st.toast("Adicionado!")
 
     if st.session_state.carrinho_desvios:
-        if st.button("🚀 ENVIAR PARA SUPABASE"):
-            for item in st.session_state.carrinho_desvios:
-                supabase.table("inspecoes").insert(item).execute()
-            st.success("Enviado com sucesso!")
-            st.session_state.carrinho_desvios = []
-            st.rerun()
+        if st.button("🚀 ENVIAR TODOS OS DESVIOS PARA O SUPABASE"):
+            try:
+                for item in st.session_state.carrinho_desvios:
+                    # Garantir que não estamos enviando um ID nulo se o banco exige um ID
+                    # Se o banco gera o ID automaticamente, remova a linha abaixo
+                    if "id" in item and (item["id"] is None or item["id"] == ""):
+                        del item["id"]
+                    
+                    # Enviar para o Supabase
+                    supabase.table("inspecoes").insert(item).execute()
+                
+                st.success("✅ Enviado com sucesso!")
+                st.session_state.carrinho_desvios = []
+                st.rerun()
+            except Exception as e:
+                st.error(f"Erro detalhado do Supabase: {e}")
 
 elif menu == "Painel de Gestão (Plano de Ação)":
     st.header("📊 Painel")
