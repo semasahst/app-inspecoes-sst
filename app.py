@@ -90,7 +90,7 @@ if menu == "Nova Inspeção":
         })
         st.toast("Adicionado!")
 
-  if st.session_state.carrinho_desvios:
+ if st.session_state.carrinho_desvios:
         if st.button("🚀 ENVIAR TODOS OS DESVIOS PARA O SUPABASE"):
             try:
                 for item in st.session_state.carrinho_desvios:
