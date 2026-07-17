@@ -78,17 +78,15 @@ if menu == "Nova Inspeção":
     st.header("📝 Registrar Inspeção em Lote")
     
     # Geolocalização
-    st.subheader("📍 Dados Globais do Local")
-    if st.button("📍 Capturar minha localização atual"):
-        loc = streamlit_geolocation()
-        if loc:
-            lat_global = loc["latitude"]
-            lon_global = loc["longitude"]
-            st.success(f"Coordenadas capturadas: {lat_global}, {lon_global}")
-        else:
-            st.warning("Não foi possível capturar a localização.")
-    
-    # (Mantenha o resto do formulário...)
+   # Use este bloco para a geolocalização:
+if st.button("📍 Capturar minha localização atual"):
+    loc = streamlit_geolocation()
+    if loc and "latitude" in loc and loc["latitude"] is not None:
+        st.session_state.lat_temp = loc["latitude"]
+        st.session_state.lon_temp = loc["longitude"]
+        st.success(f"Localização capturada: {loc['latitude']}, {loc['longitude']}")
+    else:
+        st.error("Permissão negada ou erro ao capturar GPS. Verifique se o navegador permite acesso.")
     
     # Evidências Fotográficas
     st.subheader("📸 Evidências Fotográficas (Até 3 fotos)")
