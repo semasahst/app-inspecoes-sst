@@ -7,8 +7,7 @@ from fpdf import FPDF
 import base64
 import io
 from PIL import Image
-import streamlit_geolocation
-from streamlit_geolocation 
+from streamlit_geolocation import streamlit_geolocation
 
 # Configuração da página
 st.set_page_config(page_title="SST Inspeções Pro", page_icon="🛡️", layout="wide")
