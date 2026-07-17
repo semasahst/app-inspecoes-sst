@@ -1,3 +1,7 @@
 streamlit
 pandas
+folium
+streamlit-folium
 streamlit-gsheets
+fpdf
+Pillow
