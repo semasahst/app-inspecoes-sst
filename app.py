@@ -20,7 +20,7 @@ supabase: Client = create_client(url, key)
 # Função para carregar dados do Supabase
 def carregar_dados():
     try:
-        response = supabase.table("inspeções").select("*").execute()
+        response = supabase.table("inspecoes").select("*").execute()
         df = pd.DataFrame(response.data)
         if df.empty:
             return pd.DataFrame(columns=[
