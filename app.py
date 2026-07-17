@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import folium
 from streamlit_folium import st_folium
-from streamlit_gsheets import GSheetsConnection
+from st_gsheets_connection import GSheetsConnection
 from fpdf import FPDF
 import base64
 import io
