@@ -5,3 +5,4 @@ streamlit-folium
 fpdf
 Pillow
 supabase
+streamlit-geolocation
