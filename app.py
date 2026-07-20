@@ -297,4 +297,4 @@ elif menu == "Painel de Gestão (Plano de Ação)":
     if df_existente.empty or len(df_existente) == 0 or "id" not in df_existente.columns:
         st.info("Nenhuma não conformidade registrada até o momento.")
     else:
-        status_filtro = st.multiselect("Filtrar por Status:", ["Pendente", "Em Andamento",
+        status_filtro = st.multiselect("Filtrar por Status:", ["Pendente", "Em Andamento"],
