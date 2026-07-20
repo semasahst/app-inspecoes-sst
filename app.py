@@ -144,7 +144,7 @@ def gerar_pdf_inspecao(lista_dados):
         pdf.multi_cell(190, 8, f"Recomendação:\n{dados.get('recomendacao')}", border=1)
         pdf.ln(5)
         
-   # Renderização das Fotos (até 3 fotos)
+  # Renderização das Fotos (até 3 fotos via arquivo temporário)
         fotos_adicionadas = False
         for i in range(1, 4):
             chave_foto = f'foto_{i}'
@@ -155,18 +155,23 @@ def gerar_pdf_inspecao(lista_dados):
                     pdf.cell(190, 8, "Evidências Fotográficas", ln=True, align="L")
                     fotos_adicionadas = True
                 try:
-                    # 1. Decodifica o Base64 obtendo os bytes brutos da imagem
-                    img_bytes = base64.b64decode(valor_foto)
+                    # Decodifica o Base64
+                    img_data = base64.b64decode(valor_foto)
                     
-                    # 2. Escreve os bytes em um objeto BytesIO garantindo o ponteiro no início (seek 0)
-                    image_file = io.BytesIO(img_bytes)
-                    image_file.seek(0)
+                    # Cria um arquivo temporário seguro no disco do servidor
+                    temp_filename = f"temp_foto_{i}_{dados.get('id', 'item')}.jpg"
+                    with open(temp_filename, "wb") as f:
+                        f.write(img_data)
                     
-                    # 3. Insere a imagem informando explicitamente que é do tipo JPEG
-                    pdf.image(image_file, type='JPEG', w=50, h=38)
+                    # Insere o arquivo físico no PDF
+                    pdf.image(temp_filename, w=50, h=38)
                     pdf.ln(5)
+                    
+                    # Remove o arquivo temporário após o uso para limpar o servidor
+                    import os
+                    if os.path.exists(temp_filename):
+                        os.remove(temp_filename)
                 except Exception as ex:
-                    # Captura qualquer exceção para evitar quebrar a geração do relatório inteiro
                     print(f"Erro ao inserir imagem {i} no PDF: {ex}")
                     pass
         pdf.ln(10)
