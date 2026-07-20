@@ -297,4 +297,64 @@ elif menu == "Painel de Gestão (Plano de Ação)":
     if df_existente.empty or len(df_existente) == 0 or "id" not in df_existente.columns:
         st.info("Nenhuma não conformidade registrada até o momento.")
     else:
-        status_filtro = st.multiselect("Filtrar por Status:", ["Pendente", "Em Andamento"])
+        status_filtro = st.multiselect("Filtrar por Status:", ["Pendente", "Em Andamento", "Concluído"], default=["Pendente", "Em Andamento", "Concluído"])
+        df_filtrado = df_existente[df_existente["status"].isin(status_filtro)]
+        
+        if df_filtrado.empty:
+            st.info("Nenhum registro encontrado para os filtros selecionados.")
+        else:
+            st.dataframe(
+                df_filtrado[["id", "local", "categoria", "nr", "prazo", "responsavel", "status"]],
+                use_container_width=True
+            )
+            
+            st.markdown("---")
+            st.subheader("🗺️ Mapa de Riscos / Ocorrências")
+            try:
+                mapa = folium.Map(location=[float(df_filtrado["lat"].astype(float).mean()), float(df_filtrado["lon"].astype(float).mean())], zoom_start=12)
+                for idx, row in df_filtrado.iterrows():
+                    folium.Marker(
+                        [float(row["lat"]), float(row["lon"])],
+                        popup=f"<b>Local:</b> {row['local']}<br><b>Status:</b> {row['status']}"
+                    ).add_to(mapa)
+                st_folium(mapa, width=1000, height=400)
+            except Exception:
+                st.warning("Sem coordenadas válidas para exibir o mapa.")
+
+            st.markdown("---")
+            st.subheader("🔍 Ações, Atualização de Status e Relatório Consolidado")
+            
+            ids_disponiveis = df_filtrado["id"].unique().tolist()
+            ids_selecionados = st.multiselect("Selecione os IDs para gerar o Relatório PDF Consolidado:", ids_disponiveis, default=ids_disponiveis[:1] if ids_disponiveis else [])
+            
+            if ids_selecionados:
+                registros_selecionados = df_existente[df_existente["id"].isin(ids_selecionados)].to_dict(orient="records")
+                try:
+                    pdf_bytes = gerar_pdf_inspecao(registros_selecionados)
+                    st.download_button(
+                        label=f"📥 Baixar Relatório em PDF ({len(ids_selecionados)} ocorrência(s))",
+                        data=bytes(pdf_bytes),
+                        file_name="Relatorio_Consolidado_SST.pdf",
+                        mime="application/pdf"
+                    )
+                except Exception as e:
+                    st.error(f"Erro ao gerar PDF: {e}")
+
+            st.markdown("---")
+            st.subheader("⚙️ Gerenciar Ocorrência Individual")
+            id_individual = st.selectbox("Escolha um ID para atualizar o status:", ids_disponiveis)
+            
+            if id_individual:
+                detalhe = df_existente[df_existente["id"].astype(str) == str(id_individual)].iloc[0]
+                idx_original = df_existente[df_existente["id"].astype(str) == str(id_individual)].index[0]
+                
+                col_det1, col_det2 = st.columns(2)
+                with col_det1:
+                    st.write(f"**📍 Local:** {detalhe['local']}")
+                    st.write(f"**⚠️ Risco:** {detalhe['categoria']}")
+                    st.write(f"**⚖️ Enquadramento:** {detalhe['nr']}")
+                    st.write(f"**📝 Descrição:** {detalhe['descricao']}")
+                    st.write(f"**📅 Prazo:** {detalhe['prazo']}")
+                    
+                    for i in range(1, 4):
+                        campo_f =
