@@ -144,7 +144,7 @@ def gerar_pdf_inspecao(lista_dados):
         pdf.multi_cell(190, 8, f"Recomendação:\n{dados.get('recomendacao')}", border=1)
         pdf.ln(5)
         
-        # Renderização das Fotos (até 3 fotos)
+       # Renderização das Fotos (até 3 fotos)
         fotos_adicionadas = False
         for i in range(1, 4):
             chave_foto = f'foto_{i}'
@@ -155,12 +155,17 @@ def gerar_pdf_inspecao(lista_dados):
                     pdf.cell(190, 8, "Evidências Fotográficas", ln=True, align="L")
                     fotos_adicionadas = True
                 try:
+                    # Decodifica o Base64
                     img_data = base64.b64decode(valor_foto)
+                    
+                    # Cria um arquivo temporário na memória e especifica o formato JPEG explicitamente
                     img_io = io.BytesIO(img_data)
-                    # Insere a imagem com largura controlada para caber bem no PDF
-                    pdf.image(img_io, w=50, h=38)
+                    
+                    # Adiciona a imagem informando o tipo 'IMAGE' e o formato 'JPEG'
+                    pdf.image(img_io, type='JPEG', w=50, h=38)
                     pdf.ln(2)
                 except Exception as ex:
+                    # Se houver erro em uma foto específica, o PDF continua gerando as outras
                     print(f"Erro ao inserir imagem no PDF: {ex}")
                     pass
 
