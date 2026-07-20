@@ -224,7 +224,7 @@ def gerar_pdf_inspecao(lista_dados):
     
     return pdf.output(dest='S').encode('latin-1')
 # --- NAVEGAÇÃO ---
-menu = st.sidebar.selectbox("Navegação", ["Nova Inspeção", "Painel de Gestão (Plano de Ação)"])
+menu = st.sidebar.selectbox("Navegação", ["Nova Inspeção", "Painel de Gestão (Plano de Ação)", "Dashboard de Indicadores"])
 
 # ------------------------------------------------------------------
 # TELA 1: NOVA INSPEÇÃO
@@ -413,3 +413,53 @@ elif menu == "Painel de Gestão (Plano de Ação)":
                             st.rerun()
                         except Exception as e:
                             st.error(f"Erro ao atualizar status: {e}")
+# ------------------------------------------------------------------
+# TELA 3: DASHBOARD DE INDICADORES DE SST
+# ------------------------------------------------------------------
+elif menu == "Dashboard de Indicadores":
+    st.header("📈 Dashboard Analítico de Desvios de SST")
+    
+    if df_existente.empty or len(df_existente) == 0:
+        st.info("Ainda não há dados suficientes no Supabase para gerar o dashboard.")
+    else:
+        # Métricas Principais (KPIs no topo)
+        total_desvios = len(df_existente)
+        pendentes = len(df_existente[df_existente["status"] == "Pendente"])
+        em_andamento = len(df_existente[df_existente["status"] == "Em Andamento"])
+        concluidos = len(df_existente[df_existente["status"] == "Concluído"])
+        
+        col_kpi1, col_kpi2, col_kpi3, col_kpi4 = st.columns(4)
+        with col_kpi1:
+            st.metric("Total de Ocorrências", total_desvios)
+        with col_kpi2:
+            st.metric("Pendentes", pendentes, delta_color="inverse")
+        with col_kpi3:
+            st.metric("Em Andamento", em_andamento)
+        with col_kpi4:
+            st.metric("Concluídas", concluidos, delta="OK")
+            
+        st.markdown("---")
+        
+        # Gráficos Analíticos
+        col_g1, col_g2 = st.columns(2)
+        
+        with col_g1:
+            st.subheader("📊 Desvios por Norma / Categoria")
+            if "categoria" in df_existente.columns:
+                df_cat = df_existente["categoria"].value_counts().reset_index()
+                df_cat.columns = ["Categoria", "Quantidade"]
+                st.bar_chart(df_cat.set_index("Categoria"))
+                
+        with col_g2:
+            st.subheader("🎯 Status Atual dos Planos de Ação")
+            if "status" in df_existente.columns:
+                df_status = df_existente["status"].value_counts().reset_index()
+                df_status.columns = ["Status", "Quantidade"]
+                st.bar_chart(df_status.set_index("Status"))
+                
+        st.markdown("---")
+        st.subheader("🏢 Incidência de Desvios por Setor / Local")
+        if "local" in df_existente.columns:
+            df_local = df_existente["local"].value_counts().reset_index()
+            df_local.columns = ["Local", "Quantidade"]
+            st.bar_chart(df_local.set_index("Local"))
