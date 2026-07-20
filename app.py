@@ -7,7 +7,6 @@ from fpdf import FPDF
 import base64
 import io
 from PIL import Image
-from streamlit_geolocation import streamlit_geolocation
 
 # Configuração da página
 st.set_page_config(page_title="SST Inspeções Pro", page_icon="🛡️", layout="wide")
@@ -38,27 +37,39 @@ df_existente = carregar_dados()
 if "carrinho_desvios" not in st.session_state:
     st.session_state.carrinho_desvios = []
 
-# --- BANCO DE DADOS DE NRs ---
+# --- CATÁLOGO AMPLIADO DE NÃO CONFORMIDADES (AGILIDADE EM CAMPO) ---
 DICIONARIO_NRS = {
-    "Trabalho em Altura": {
-        "nr": "NR-35 (Trabalho em Altura)",
-        "recomendacao": "Garantir o uso de cinto de segurança tipo paraquedista conectado a cabo de segurança/linha de vida inspecionada."
+    "NR 01 - PGR (Gerenciamento de Riscos)": {
+        "nr": "NR-01 (Disposições Gerais e Gerenciamento de Riscos Ocupacionais)",
+        "recomendacao": "Elaborar ou revisar o PGR anualmente (ou a cada 2 anos), mapeando todos os perigos e implementando um plano de ação claro com o cronograma 5W2H."
     },
-    "Instalações Elétricas": {
-        "nr": "NR-10 (Segurança em Instalações Elétricas)",
-        "recomendacao": "Sinalizar e bloquear o quadro elétrico de forma a impedir energização acidental (Lockout/Tagout)."
-    },
-    "Máquinas e Equipamentos": {
-        "nr": "NR-12 (Segurança no Trabalho em Máquinas)",
-        "recomendacao": "Instalar ou adequar as proteções físicas fixas ou móveis intertravadas na zona de perigo da máquina."
-    },
-    "Equipamentos de Proteção": {
+    "NR 06 - EPIs (Falta de Registro ou CA Válido)": {
         "nr": "NR-06 (Equipamentos de Proteção Individual)",
-        "recomendacao": "Fornecer imediatamente o EPI adequado ao risco, registrar a entrega na ficha de EPI e treinar o colaborador."
+        "recomendacao": "Implementar uma ficha de EPI (física ou digital) com assinatura do trabalhador no ato da entrega e criar um sistema de alerta para validade dos CAs em estoque."
     },
-    "Sinalização de Segurança": {
-        "nr": "NR-26 (Sinalização de Segurança)",
-        "recomendacao": "Instalar placas de sinalização de advertência, rotas de fuga e saídas de emergência desobstruídas."
+    "NR 10 - Instalações Elétricas (Prontuário/Unifilar)": {
+        "nr": "NR-10 (Segurança em Instalações e Serviços em Eletricidade)",
+        "recomendacao": "Contratar um profissional habilitado (Engenheiro Eletricista) para atualizar os esquemas unifilares e centralizar os laudos de aterramento e SPDA no Prontuário."
+    },
+    "NR 10 - Painéis Elétricos (Abertos / Gambiarras)": {
+        "nr": "NR-10 (Segurança em Instalações e Serviços em Eletricidade)",
+        "recomendacao": "Realizar o fechamento dos painéis, instalar barreiras plásticas internas contra contatos acidentais e colar etiquetas de sinalização 'Risco de Choque Elétrico'."
+    },
+    "NR 12 - Máquinas e Equipamentos (Falta de Proteção)": {
+        "nr": "NR-12 (Segurança no Trabalho em Máquinas e Equipamentos)",
+        "recomendacao": "Realizar uma Apreciação de Riscos na máquina e instalar proteções físicas mecânicas integradas a chaves de segurança com intertravamento."
+    },
+    "NR 12 - Painéis e Comandos (Botão de Emergência)": {
+        "nr": "NR-12 (Segurança no Trabalho em Máquinas e Equipamentos)",
+        "recomendacao": "Adequar o painel instalando botões de parada de emergência do tipo cogumelo em locais de fácil acesso ao operador e realizar testes periódicos de funcionamento."
+    },
+    "NR 35 - Trabalho em Altura (Falta de AR e PT)": {
+        "nr": "NR-35 (Trabalho em Altura)",
+        "recomendacao": "Adotar um procedimento rígido onde nenhuma atividade acima de 2 metros inicie sem a emissão da AR/PT assinada pelo supervisor e executores."
+    },
+    "NR 35 - Ancoragem e EPIs (Ponto Inadequado)": {
+        "nr": "NR-35 (Trabalho em Altura)",
+        "recomendacao": "Instalar e certificar Linhas de Vida e Pontos de Ancoragem definitivos (ou usar provisórios devidamente calculados por engenheiro mecânico/civil)."
     }
 }
 
@@ -85,7 +96,7 @@ def processar_e_converter_imagem(uploaded_file):
             return ""
     return ""
 
-# --- FUNÇÃO PARA GERAR RELATÓRIO PDF (COM CAPA E MÚLTIPLOS ITENS) ---
+# --- FUNÇÃO PARA GERAR RELATÓRIO PDF (COM CAPA, MÚLTIPLOS ITENS E FOTOS) ---
 def gerar_pdf_inspecao(lista_dados):
     pdf = FPDF()
     
@@ -115,7 +126,6 @@ def gerar_pdf_inspecao(lista_dados):
         pdf.add_page()
         pdf.set_font("Arial", size=12)
         
-        # Cabeçalho da página de ocorrência
         pdf.set_fill_color(31, 78, 121)
         pdf.set_text_color(255, 255, 255)
         pdf.cell(190, 12, f"DETALHES DA NÃO CONFORMIDADE - ID #{dados.get('id')}", ln=True, align="C", fill=True)
@@ -144,7 +154,7 @@ def gerar_pdf_inspecao(lista_dados):
         pdf.multi_cell(190, 8, f"Recomendação:\n{dados.get('recomendacao')}", border=1)
         pdf.ln(5)
         
-  # Renderização das Fotos (até 3 fotos via arquivo temporário)
+        # Renderização das Fotos via arquivo temporário para o FPDF
         fotos_adicionadas = False
         for i in range(1, 4):
             chave_foto = f'foto_{i}'
@@ -155,25 +165,19 @@ def gerar_pdf_inspecao(lista_dados):
                     pdf.cell(190, 8, "Evidências Fotográficas", ln=True, align="L")
                     fotos_adicionadas = True
                 try:
-                    # Decodifica o Base64
+                    import os
                     img_data = base64.b64decode(valor_foto)
-                    
-                    # Cria um arquivo temporário seguro no disco do servidor
                     temp_filename = f"temp_foto_{i}_{dados.get('id', 'item')}.jpg"
                     with open(temp_filename, "wb") as f:
                         f.write(img_data)
-                    
-                    # Insere o arquivo físico no PDF
                     pdf.image(temp_filename, w=50, h=38)
-                    pdf.ln(5)
-                    
-                    # Remove o arquivo temporário após o uso para limpar o servidor
-                    import os
+                    pdf.ln(2)
                     if os.path.exists(temp_filename):
                         os.remove(temp_filename)
                 except Exception as ex:
                     print(f"Erro ao inserir imagem {i} no PDF: {ex}")
                     pass
+
         pdf.ln(10)
         pdf.set_font("Arial", size=9)
         pdf.cell(95, 10, "_________________________________________", align="C")
@@ -182,6 +186,7 @@ def gerar_pdf_inspecao(lista_dados):
         pdf.cell(95, 5, "Assinatura do Responsável", ln=True, align="C")
     
     return pdf.output(dest='S').encode('latin-1')
+
 # --- NAVEGAÇÃO ---
 menu = st.sidebar.selectbox("Navegação", ["Nova Inspeção", "Painel de Gestão (Plano de Ação)"])
 
@@ -192,39 +197,23 @@ if menu == "Nova Inspeção":
     st.header("📝 Registrar Inspeção em Lote")
     
     st.subheader("📍 Dados Globais do Local")
-    
-    # Geolocalização Automática Robusta
-    if st.button("📍 Capturar minha localização atual"):
-        try:
-            loc = streamlit_geolocation()
-            if loc and isinstance(loc, dict) and loc.get("latitude") is not None and loc.get("latitude") != 0.0:
-                st.session_state.lat_temp = float(loc["latitude"])
-                st.session_state.lon_temp = float(loc["longitude"])
-                st.success(f"Coordenadas capturadas: {st.session_state.lat_temp}, {st.session_state.lon_temp}")
-            else:
-                st.warning("O navegador não retornou a localização. Verifique as permissões de GPS.")
-        except Exception as e:
-            st.error(f"Erro ao capturar geolocalização: {e}")
-
     col_loc1, col_loc2 = st.columns(2)
     with col_loc1:
         local_global = st.text_input("Local / Setor Geral da Inspeção:", placeholder="Ex: Galpão Central, Almoxarifado")
     with col_loc2:
         col_lat, col_lon = st.columns(2)
         with col_lat:
-            lat_default = st.session_state.get("lat_temp", -23.55052)
-            lat_global = st.number_input("Latitude", value=lat_default, format="%.5f")
+            lat_global = st.number_input("Latitude", value=-23.55052, format="%.5f")
         with col_lon:
-            lon_default = st.session_state.get("lon_temp", -46.63330)
-            lon_global = st.number_input("Longitude", value=lon_default, format="%.5f")
+            lon_global = st.number_input("Longitude", value=-46.63330, format="%.5f")
             
     st.markdown("---")
     st.subheader("⚠️ Adicionar Não Conformidade ao Local")
     
     col1, col2 = st.columns(2)
     with col1:
-        categoria = st.selectbox("Categoria do Desvio:", list(DICIONARIO_NRS.keys()))
-        descricao = st.text_area("Descrição do Desvio:", placeholder="Descreva o problema encontrado...")
+        categoria = st.selectbox("Selecione o Cenário / Desvio Frequente:", list(DICIONARIO_NRS.keys()))
+        descricao = st.text_area("Descrição detalhada do desvio:", placeholder="Descreva o problema encontrado...")
         
         nr_sugerida = DICIONARIO_NRS[categoria]["nr"]
         st.info(f"**Dispositivo Sugerido:** {nr_sugerida}")
@@ -282,11 +271,9 @@ if menu == "Nova Inspeção":
             if st.button("🚀 ENVIAR TODOS OS DESVIOS PARA O SUPABASE"):
                 try:
                     for item in st.session_state.carrinho_desvios:
-                        # Remove ID para o Supabase gerar automaticamente via Identity
                         if "id" in item:
                             del item["id"]
                         
-                        # Filtra apenas as colunas válidas do banco
                         colunas_banco = [
                             "local", "categoria", "descricao", "nr", "recomendacao", 
                             "prazo", "responsavel", "lat", "lon", "status", "foto_1", "foto_2", "foto_3"
@@ -299,7 +286,7 @@ if menu == "Nova Inspeção":
                     st.session_state.carrinho_desvios = []
                     st.rerun()
                 except Exception as e:
-                    st.error(f"Erro detalhado ao gravar no Supabase: {e}")
+                    st.error(f"Erro detalhado do Supabase: {e}")
 
 # ------------------------------------------------------------------
 # TELA 2: PAINEL DE GESTÃO
@@ -310,86 +297,4 @@ elif menu == "Painel de Gestão (Plano de Ação)":
     if df_existente.empty or len(df_existente) == 0 or "id" not in df_existente.columns:
         st.info("Nenhuma não conformidade registrada até o momento.")
     else:
-        status_filtro = st.multiselect("Filtrar por Status:", ["Pendente", "Em Andamento", "Concluído"], default=["Pendente", "Em Andamento", "Concluído"])
-        df_filtrado = df_existente[df_existente["status"].isin(status_filtro)]
-        
-        if df_filtrado.empty:
-            st.info("Nenhum registro encontrado para os filtros selecionados.")
-        else:
-            st.dataframe(
-                df_filtrado[["id", "local", "categoria", "nr", "prazo", "responsavel", "status"]],
-                use_container_width=True
-            )
-            
-            st.markdown("---")
-            st.subheader("🗺️ Mapa de Riscos / Ocorrências")
-            try:
-                mapa = folium.Map(location=[float(df_filtrado["lat"].astype(float).mean()), float(df_filtrado["lon"].astype(float).mean())], zoom_start=12)
-                for idx, row in df_filtrado.iterrows():
-                    folium.Marker(
-                        [float(row["lat"]), float(row["lon"])],
-                        popup=f"<b>Local:</b> {row['local']}<br><b>Status:</b> {row['status']}"
-                    ).add_to(mapa)
-                st_folium(mapa, width=1000, height=400)
-            except Exception:
-                st.warning("Sem coordenadas válidas para exibir o mapa.")
-
-            st.markdown("---")
-            st.subheader("🔍 Ações, Atualização de Status e Relatório Consolidado")
-            
-            # SELEÇÃO MÚLTIPLA DE IDS PARA O RELATÓRIO
-            ids_disponiveis = df_filtrado["id"].unique().tolist()
-            ids_selecionados = st.multiselect("Selecione os IDs para gerar o Relatório PDF Consolidado:", ids_disponiveis, default=ids_disponiveis[:1] if ids_disponiveis else [])
-            
-            if ids_selecionados:
-                # Cria a lista de dicionários com os registros selecionados
-                registros_selecionados = df_existente[df_existente["id"].isin(ids_selecionados)].to_dict(orient="records")
-                
-                try:
-                    pdf_bytes = gerar_pdf_inspecao(registros_selecionados)
-                    st.download_button(
-                        label=f"📥 Baixar Relatório em PDF ({len(ids_selecionados)} ocorrência(s))",
-                        data=bytes(pdf_bytes),
-                        file_name="Relatorio_Consolidado_SST.pdf",
-                        mime="application/pdf"
-                    )
-                except Exception as e:
-                    st.error(f"Erro ao gerar PDF: {e}")
-
-            st.markdown("---")
-            st.subheader("⚙️ Gerenciar Ocorrência Individual")
-            id_individual = st.selectbox("Escolha um ID para atualizar o status:", ids_disponiveis)
-            
-            if id_individual:
-                detalhe = df_existente[df_existente["id"].astype(str) == str(id_individual)].iloc[0]
-                idx_original = df_existente[df_existente["id"].astype(str) == str(id_individual)].index[0]
-                
-                col_det1, col_det2 = st.columns(2)
-                with col_det1:
-                    st.write(f"**📍 Local:** {detalhe['local']}")
-                    st.write(f"**⚠️ Risco:** {detalhe['categoria']}")
-                    st.write(f"**⚖️ Enquadramento:** {detalhe['nr']}")
-                    st.write(f"**📝 Descrição:** {detalhe['descricao']}")
-                    st.write(f"**📅 Prazo:** {detalhe['prazo']}")
-                    
-                    for i in range(1, 4):
-                        campo_f = f"foto_{i}"
-                        if campo_f in detalhe and detalhe[campo_f] and str(detalhe[campo_f]).strip() not in ["", "nan", "None"]:
-                            st.markdown(f"**Visualização da Foto {i}:**")
-                            try:
-                                st.image(base64.b64decode(detalhe[campo_f]), width=300)
-                            except:
-                                st.caption("Erro ao processar imagem.")
-                
-                with col_det2:
-                    status_opcoes = ["Pendente", "Em Andamento", "Concluído"]
-                    status_atual = detalhe["status"] if detalhe["status"] in status_opcoes else "Pendente"
-                    novo_status = st.selectbox("Atualizar status:", status_opcoes, index=status_opcoes.index(status_atual), key=f"status_{id_individual}")
-                    
-                    if st.button("Atualizar Status no Banco"):
-                        try:
-                            supabase.table("inspecoes").update({"status": novo_status}).eq("id", int(id_individual)).execute()
-                            st.success("Status atualizado com sucesso!")
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Erro ao atualizar status: {e}")
+        status_filtro = st.multiselect("Filtrar por Status:", ["Pendente", "Em Andamento",
