@@ -357,4 +357,23 @@ elif menu == "Painel de Gestão (Plano de Ação)":
                     st.write(f"**📅 Prazo:** {detalhe['prazo']}")
                     
                     for i in range(1, 4):
-                        campo_f =
+                        campo_f = f"foto_{i}"
+                        if campo_f in detalhe and detalhe[campo_f] and str(detalhe[campo_f]).strip() not in ["", "nan", "None"]:
+                            st.markdown(f"**Visualização da Foto {i}:**")
+                            try:
+                                st.image(base64.b64decode(detalhe[campo_f]), width=300)
+                            except:
+                                st.caption("Erro ao processar imagem.")
+                
+                with col_det2:
+                    status_opcoes = ["Pendente", "Em Andamento", "Concluído"]
+                    status_atual = detalhe["status"] if detalhe["status"] in status_opcoes else "Pendente"
+                    novo_status = st.selectbox("Atualizar status:", status_opcoes, index=status_opcoes.index(status_atual), key=f"status_{id_individual}")
+                    
+                    if st.button("Atualizar Status no Banco"):
+                        try:
+                            supabase.table("inspecoes").update({"status": novo_status}).eq("id", int(id_individual)).execute()
+                            st.success("Status atualizado com sucesso!")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Erro ao atualizar status: {e}")
