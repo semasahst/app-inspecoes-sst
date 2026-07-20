@@ -197,15 +197,14 @@ if menu == "Nova Inspeção":
     if st.button("📍 Capturar minha localização atual"):
         try:
             loc = streamlit_geolocation()
-            # Verifica se retornou um dicionário válido com latitude
             if loc and isinstance(loc, dict) and loc.get("latitude") is not None and loc.get("latitude") != 0.0:
                 st.session_state.lat_temp = float(loc["latitude"])
                 st.session_state.lon_temp = float(loc["longitude"])
-                st.success(f"Coordenadas capturadas com sucesso: {st.session_state.lat_temp}, {st.session_state.lon_temp}")
+                st.success(f"Coordenadas capturadas: {st.session_state.lat_temp}, {st.session_state.lon_temp}")
             else:
-                st.warning("O navegador não retornou a localização. Verifique se permitiu o acesso ao GPS na barra de endereços ou se está usando HTTPS.")
+                st.warning("O navegador não retornou a localização. Verifique as permissões de GPS.")
         except Exception as e:
-            st.error(f"Erro ao tentar capturar a geolocalização: {e}")
+            st.error(f"Erro ao capturar geolocalização: {e}")
 
     col_loc1, col_loc2 = st.columns(2)
     with col_loc1:
@@ -213,7 +212,6 @@ if menu == "Nova Inspeção":
     with col_loc2:
         col_lat, col_lon = st.columns(2)
         with col_lat:
-            # Usa o valor capturado no session_state, ou o padrão se não houver
             lat_default = st.session_state.get("lat_temp", -23.55052)
             lat_global = st.number_input("Latitude", value=lat_default, format="%.5f")
         with col_lon:
