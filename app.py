@@ -96,7 +96,7 @@ def processar_e_converter_imagem(uploaded_file):
             return ""
     return ""
 
-# --- FUNÇÃO PARA GERAR RELATÓRIO PDF (COM CAPA, MÚLTIPLOS ITENS E FOTOS) ---
+# --- FUNÇÃO PARA GERAR RELATÓRIO PDF (FOTOS EM 2 COLUNAS) ---
 def gerar_pdf_inspecao(lista_dados):
     pdf = FPDF()
     
@@ -154,29 +154,66 @@ def gerar_pdf_inspecao(lista_dados):
         pdf.multi_cell(190, 8, f"Recomendação:\n{dados.get('recomendacao')}", border=1)
         pdf.ln(5)
         
-        # Renderização das Fotos via arquivo temporário para o FPDF
-        fotos_adicionadas = False
+        # --- COLETA E RENDERIZAÇÃO DAS FOTOS EM 2 COLUNAS ---
+        fotos_validas = []
         for i in range(1, 4):
             chave_foto = f'foto_{i}'
             valor_foto = dados.get(chave_foto)
             if valor_foto and str(valor_foto).strip() not in ["", "nan", "None"]:
-                if not fotos_adicionadas:
-                    pdf.set_font("Arial", style="B", size=11)
-                    pdf.cell(190, 8, "Evidências Fotográficas", ln=True, align="L")
-                    fotos_adicionadas = True
+                fotos_validas.append((i, valor_foto))
+                
+        if fotos_validas:
+            pdf.set_font("Arial", style="B", size=11)
+            pdf.cell(190, 8, "Evidências Fotográficas", ln=True, align="L")
+            pdf.ln(2)
+            
+            # Configurações de layout em grade (2 colunas)
+            largura_img = 90  # mm por foto (duas cabem perfeitamente em 190mm com folga)
+            altura_img = 60   # mm
+            espacamento_x = 10 # espaço horizontal entre as duas fotos
+            
+            x_inicial = pdf.get_x()
+            y_inicial = pdf.get_y()
+            
+            coluna_atual = 0
+            for idx, (num_foto, valor_foto) in enumerate(fotos_validas):
                 try:
                     import os
                     img_data = base64.b64decode(valor_foto)
-                    temp_filename = f"temp_foto_{i}_{dados.get('id', 'item')}.jpg"
+                    temp_filename = f"temp_foto_{num_foto}_{dados.get('id', 'item')}.jpg"
                     with open(temp_filename, "wb") as f:
                         f.write(img_data)
-                    pdf.image(temp_filename, w=50, h=38)
-                    pdf.ln(2)
+                    
+                    # Posicionamento horizontal baseado na coluna (0 ou 1)
+                    if coluna_atual == 0:
+                        x_pos = x_inicial
+                        y_pos = pdf.get_y()
+                    else:
+                        # Move para a direita somando a largura da primeira foto + espaçamento
+                        x_pos = x_inicial + largura_img + espacamento_x
+                        # Mantém a mesma altura da linha atual
+                        pdf.set_xy(x_pos, y_pos)
+                        
+                    pdf.image(temp_filename, x=x_pos, w=largura_img, h=altura_img)
+                    
                     if os.path.exists(temp_filename):
                         os.remove(temp_filename)
+                        
+                    # Alterna a coluna
+                    coluna_atual += 1
+                    if coluna_atual > 1:
+                        # Se passou de 2 colunas, desce para a próxima linha
+                        coluna_atual = 0
+                        pdf.ln(altura_img + 5)
                 except Exception as ex:
-                    print(f"Erro ao inserir imagem {i} no PDF: {ex}")
+                    print(f"Erro ao inserir imagem {num_foto} no PDF: {ex}")
                     pass
+            
+            # Garante que o cursor salta para baixo após terminar as fotos
+            if coluna_atual != 0:
+                pdf.ln(altura_img + 5)
+            else:
+                pdf.ln(5)
 
         pdf.ln(10)
         pdf.set_font("Arial", size=9)
@@ -186,7 +223,6 @@ def gerar_pdf_inspecao(lista_dados):
         pdf.cell(95, 5, "Assinatura do Responsável", ln=True, align="C")
     
     return pdf.output(dest='S').encode('latin-1')
-
 # --- NAVEGAÇÃO ---
 menu = st.sidebar.selectbox("Navegação", ["Nova Inspeção", "Painel de Gestão (Plano de Ação)"])
 
