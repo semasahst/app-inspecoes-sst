@@ -85,69 +85,93 @@ def processar_e_converter_imagem(uploaded_file):
             return ""
     return ""
 
-# --- FUNÇÃO PARA GERAR RELATÓRIO PDF ---
-def gerar_pdf_inspecao(dados):
+# --- FUNÇÃO PARA GERAR RELATÓRIO PDF (COM CAPA E MÚLTIPLOS ITENS) ---
+def gerar_pdf_inspecao(lista_dados):
     pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", size=12)
     
+    # --- CAPA DO RELATÓRIO ---
+    pdf.add_page()
+    pdf.set_font("Arial", style="B", size=20)
     pdf.set_fill_color(31, 78, 121)
     pdf.set_text_color(255, 255, 255)
-    pdf.cell(190, 15, "RELATÓRIO DE INSPEÇÃO DE SEGURANÇA DO TRABALHO", ln=True, align="C", fill=True)
-    pdf.ln(10)
+    pdf.cell(190, 25, "RELATÓRIO TÉCNICO DE INSPEÇÃO", ln=True, align="C", fill=True)
+    pdf.ln(20)
     
     pdf.set_text_color(0, 0, 0)
-    pdf.set_font("Arial", style="B", size=12)
-    pdf.cell(190, 8, f"ID do Registro: #{dados.get('id')}", ln=True)
-    pdf.set_font("Arial", size=11)
-    
-    pdf.cell(95, 8, f"Setor/Local: {dados.get('local')}", border=1)
-    pdf.cell(95, 8, f"Data Limite: {dados.get('prazo')}", border=1, ln=True)
-    pdf.cell(95, 8, f"Responsável: {dados.get('responsavel')}", border=1)
-    pdf.cell(95, 8, f"Status Atual: {dados.get('status')}", border=1, ln=True)
-    pdf.ln(5)
+    pdf.set_font("Arial", size=14)
+    pdf.cell(190, 10, "Segurança e Saúde no Trabalho - SST", ln=True, align="C")
+    pdf.ln(30)
     
     pdf.set_font("Arial", style="B", size=12)
-    pdf.set_fill_color(220, 220, 220)
-    pdf.cell(190, 8, "Descrição da Não Conformidade", ln=True, fill=True)
-    pdf.set_font("Arial", size=11)
-    pdf.multi_cell(190, 8, str(dados.get('descricao', '')), border=1)
-    pdf.ln(5)
+    pdf.cell(190, 8, f"Total de Não Conformidades no Relatório: {len(lista_dados)}", ln=True, align="C")
+    pdf.cell(190, 8, f"Data de Emissão: {pd.Timestamp.now().strftime('%d/%m/%Y')}", ln=True, align="C")
+    pdf.ln(40)
     
-    pdf.set_font("Arial", style="B", size=12)
-    pdf.set_fill_color(220, 220, 220)
-    pdf.cell(190, 8, "Fundamentação Legal e Recomendações", ln=True, fill=True)
-    pdf.set_font("Arial", size=11)
-    pdf.cell(190, 8, f"Enquadramento: {dados.get('nr')}", border=1, ln=True)
-    pdf.multi_cell(190, 8, f"Recomendação:\n{dados.get('recomendacao')}", border=1)
-    pdf.ln(10)
-    
-    fotos_adicionadas = False
-    for i in range(1, 4):
-        chave_foto = f'foto_{i}'
-        if chave_foto in dados and dados[chave_foto] and str(dados[chave_foto]).strip() not in ["", "nan", "None"]:
-            if not fotos_adicionadas:
-                pdf.set_font("Arial", style="B", size=12)
-                pdf.cell(190, 8, "Evidências Fotográficas", ln=True, align="L")
-                pdf.ln(2)
-                fotos_adicionadas = True
-            try:
-                img_data = base64.b64decode(dados[chave_foto])
-                img_io = io.BytesIO(img_data)
-                pdf.image(img_io, w=60, h=45)
-                pdf.ln(5)
-            except:
-                pass
+    pdf.set_font("Arial", size=10)
+    pdf.cell(190, 8, "Documento gerado automaticamente pelo sistema SST Inspeções Pro.", ln=True, align="C")
 
-    pdf.ln(10)
-    pdf.set_font("Arial", size=9)
-    pdf.cell(95, 10, "_________________________________________", align="C")
-    pdf.cell(95, 10, "_________________________________________", ln=True, align="C")
-    pdf.cell(95, 5, "Assinatura do Inspetor de SST", align="C")
-    pdf.cell(95, 5, "Assinatura do Responsável", ln=True, align="C")
+    # --- PÁGINAS DE CONTEÚDO (UMA PÁGINA POR NÃO CONFORMIDADE) ---
+    for dados in lista_dados:
+        pdf.add_page()
+        pdf.set_font("Arial", size=12)
+        
+        # Cabeçalho da página de ocorrência
+        pdf.set_fill_color(31, 78, 121)
+        pdf.set_text_color(255, 255, 255)
+        pdf.cell(190, 12, f"DETALHES DA NÃO CONFORMIDADE - ID #{dados.get('id')}", ln=True, align="C", fill=True)
+        pdf.ln(5)
+        
+        pdf.set_text_color(0, 0, 0)
+        pdf.set_font("Arial", size=11)
+        pdf.cell(95, 8, f"Setor/Local: {dados.get('local')}", border=1)
+        pdf.cell(95, 8, f"Data Limite: {dados.get('prazo')}", border=1, ln=True)
+        pdf.cell(95, 8, f"Responsável: {dados.get('responsavel')}", border=1)
+        pdf.cell(95, 8, f"Status Atual: {dados.get('status')}", border=1, ln=True)
+        pdf.ln(5)
+        
+        pdf.set_font("Arial", style="B", size=11)
+        pdf.set_fill_color(220, 220, 220)
+        pdf.cell(190, 8, "Descrição do Desvio", ln=True, fill=True)
+        pdf.set_font("Arial", size=10)
+        pdf.multi_cell(190, 8, str(dados.get('descricao', '')), border=1)
+        pdf.ln(5)
+        
+        pdf.set_font("Arial", style="B", size=11)
+        pdf.set_fill_color(220, 220, 220)
+        pdf.cell(190, 8, "Fundamentação Legal e Recomendações", ln=True, fill=True)
+        pdf.set_font("Arial", size=10)
+        pdf.cell(190, 8, f"Enquadramento: {dados.get('nr')}", border=1, ln=True)
+        pdf.multi_cell(190, 8, f"Recomendação:\n{dados.get('recomendacao')}", border=1)
+        pdf.ln(5)
+        
+        # Renderização das Fotos (até 3 fotos)
+        fotos_adicionadas = False
+        for i in range(1, 4):
+            chave_foto = f'foto_{i}'
+            valor_foto = dados.get(chave_foto)
+            if valor_foto and str(valor_foto).strip() not in ["", "nan", "None"]:
+                if not fotos_adicionadas:
+                    pdf.set_font("Arial", style="B", size=11)
+                    pdf.cell(190, 8, "Evidências Fotográficas", ln=True, align="L")
+                    fotos_adicionadas = True
+                try:
+                    img_data = base64.b64decode(valor_foto)
+                    img_io = io.BytesIO(img_data)
+                    # Insere a imagem com largura controlada para caber bem no PDF
+                    pdf.image(img_io, w=50, h=38)
+                    pdf.ln(2)
+                except Exception as ex:
+                    print(f"Erro ao inserir imagem no PDF: {ex}")
+                    pass
+
+        pdf.ln(10)
+        pdf.set_font("Arial", size=9)
+        pdf.cell(95, 10, "_________________________________________", align="C")
+        pdf.cell(95, 10, "_________________________________________", ln=True, align="C")
+        pdf.cell(95, 5, "Assinatura do Inspetor de SST", align="C")
+        pdf.cell(95, 5, "Assinatura do Responsável", ln=True, align="C")
     
     return pdf.output(dest='S').encode('latin-1')
-
 # --- NAVEGAÇÃO ---
 menu = st.sidebar.selectbox("Navegação", ["Nova Inspeção", "Painel de Gestão (Plano de Ação)"])
 
@@ -296,12 +320,34 @@ elif menu == "Painel de Gestão (Plano de Ação)":
                 st.warning("Sem coordenadas válidas para exibir o mapa.")
 
             st.markdown("---")
-            st.subheader("🔍 Ações e Detalhes da Ocorrência")
-            id_selecionado = st.selectbox("Escolha o ID para ver detalhes:", df_filtrado["id"].unique())
+            st.subheader("🔍 Ações, Atualização de Status e Relatório Consolidado")
             
-            if id_selecionado:
-                detalhe = df_existente[df_existente["id"].astype(str) == str(id_selecionado)].iloc[0]
-                idx_original = df_existente[df_existente["id"].astype(str) == str(id_selecionado)].index[0]
+            # SELEÇÃO MÚLTIPLA DE IDS PARA O RELATÓRIO
+            ids_disponiveis = df_filtrado["id"].unique().tolist()
+            ids_selecionados = st.multiselect("Selecione os IDs para gerar o Relatório PDF Consolidado:", ids_disponiveis, default=ids_disponiveis[:1] if ids_disponiveis else [])
+            
+            if ids_selecionados:
+                # Cria a lista de dicionários com os registros selecionados
+                registros_selecionados = df_existente[df_existente["id"].isin(ids_selecionados)].to_dict(orient="records")
+                
+                try:
+                    pdf_bytes = gerar_pdf_inspecao(registros_selecionados)
+                    st.download_button(
+                        label=f"📥 Baixar Relatório em PDF ({len(ids_selecionados)} ocorrência(s))",
+                        data=bytes(pdf_bytes),
+                        file_name="Relatorio_Consolidado_SST.pdf",
+                        mime="application/pdf"
+                    )
+                except Exception as e:
+                    st.error(f"Erro ao gerar PDF: {e}")
+
+            st.markdown("---")
+            st.subheader("⚙️ Gerenciar Ocorrência Individual")
+            id_individual = st.selectbox("Escolha um ID para atualizar o status:", ids_disponiveis)
+            
+            if id_individual:
+                detalhe = df_existente[df_existente["id"].astype(str) == str(id_individual)].iloc[0]
+                idx_original = df_existente[df_existente["id"].astype(str) == str(id_individual)].index[0]
                 
                 col_det1, col_det2 = st.columns(2)
                 with col_det1:
@@ -323,25 +369,12 @@ elif menu == "Painel de Gestão (Plano de Ação)":
                 with col_det2:
                     status_opcoes = ["Pendente", "Em Andamento", "Concluído"]
                     status_atual = detalhe["status"] if detalhe["status"] in status_opcoes else "Pendente"
-                    novo_status = st.selectbox("Atualizar status:", status_opcoes, index=status_opcoes.index(status_atual))
+                    novo_status = st.selectbox("Atualizar status:", status_opcoes, index=status_opcoes.index(status_atual), key=f"status_{id_individual}")
                     
-                    if st.button("Atualizar Status"):
+                    if st.button("Atualizar Status no Banco"):
                         try:
-                            supabase.table("inspecoes").update({"status": novo_status}).eq("id", int(id_selecionado)).execute()
+                            supabase.table("inspecoes").update({"status": novo_status}).eq("id", int(id_individual)).execute()
                             st.success("Status atualizado com sucesso!")
                             st.rerun()
                         except Exception as e:
                             st.error(f"Erro ao atualizar status: {e}")
-                    
-                    st.markdown("---")
-                    st.markdown("**Gerar Relatório Técnico:**")
-                    try:
-                        pdf_bytes = gerar_pdf_inspecao(detalhe)
-                        st.download_button(
-                            label="📥 Descarregar Relatório em PDF",
-                            data=bytes(pdf_bytes),
-                            file_name=f"Relatorio_Inspecao_SST_ID_{id_selecionado}.pdf",
-                            mime="application/pdf"
-                        )
-                    except Exception as e:
-                        st.error(f"Erro ao gerar PDF: {e}")
