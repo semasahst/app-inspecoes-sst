@@ -144,7 +144,7 @@ def gerar_pdf_inspecao(lista_dados):
         pdf.multi_cell(190, 8, f"Recomendação:\n{dados.get('recomendacao')}", border=1)
         pdf.ln(5)
         
-       # Renderização das Fotos (até 3 fotos)
+      # Renderização das Fotos (até 3 fotos)
         fotos_adicionadas = False
         for i in range(1, 4):
             chave_foto = f'foto_{i}'
