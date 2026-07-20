@@ -191,17 +191,21 @@ menu = st.sidebar.selectbox("Navegação", ["Nova Inspeção", "Painel de Gestã
 if menu == "Nova Inspeção":
     st.header("📝 Registrar Inspeção em Lote")
     
-    st.subheader("📍 Dados Globais do Local")
+   st.subheader("📍 Dados Globais do Local")
     
-    # Geolocalização Automática
+    # Geolocalização Automática Robusta
     if st.button("📍 Capturar minha localização atual"):
-        loc = streamlit_geolocation()
-        if loc and isinstance(loc, dict) and loc.get("latitude") is not None:
-            st.session_state.lat_temp = loc["latitude"]
-            st.session_state.lon_temp = loc["longitude"]
-            st.success(f"Localização capturada: {loc['latitude']}, {loc['longitude']}")
-        else:
-            st.error("Erro ao capturar GPS. Verifique se o navegador tem permissão.")
+        try:
+            loc = streamlit_geolocation()
+            # Verifica se retornou um dicionário válido com latitude
+            if loc and isinstance(loc, dict) and loc.get("latitude") is not None and loc.get("latitude") != 0.0:
+                st.session_state.lat_temp = float(loc["latitude"])
+                st.session_state.lon_temp = float(loc["longitude"])
+                st.success(f"Coordenadas capturadas com sucesso: {st.session_state.lat_temp}, {st.session_state.lon_temp}")
+            else:
+                st.warning("O navegador não retornou a localização. Verifique se permitiu o acesso ao GPS na barra de endereços ou se está usando HTTPS.")
+        except Exception as e:
+            st.error(f"Erro ao tentar capturar a geolocalização: {e}")
 
     col_loc1, col_loc2 = st.columns(2)
     with col_loc1:
@@ -209,9 +213,12 @@ if menu == "Nova Inspeção":
     with col_loc2:
         col_lat, col_lon = st.columns(2)
         with col_lat:
-            lat_global = st.number_input("Latitude", value=st.session_state.get("lat_temp", -23.55052), format="%.5f")
+            # Usa o valor capturado no session_state, ou o padrão se não houver
+            lat_default = st.session_state.get("lat_temp", -23.55052)
+            lat_global = st.number_input("Latitude", value=lat_default, format="%.5f")
         with col_lon:
-            lon_global = st.number_input("Longitude", value=st.session_state.get("lon_temp", -46.63330), format="%.5f")
+            lon_default = st.session_state.get("lon_temp", -46.63330)
+            lon_global = st.number_input("Longitude", value=lon_default, format="%.5f")
             
     st.markdown("---")
     st.subheader("⚠️ Adicionar Não Conformidade ao Local")
