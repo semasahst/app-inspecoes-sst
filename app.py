@@ -279,7 +279,7 @@ elif menu == "Painel de Gestão (Plano de Ação)":
         else:
             st.dataframe(
                 df_filtrado[["id", "local", "categoria", "nr", "prazo", "responsavel", "status"]],
-                use_container_width=True, index=False
+                use_container_width=True
             )
             
             st.markdown("---")
