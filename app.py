@@ -191,7 +191,7 @@ menu = st.sidebar.selectbox("Navegação", ["Nova Inspeção", "Painel de Gestã
 if menu == "Nova Inspeção":
     st.header("📝 Registrar Inspeção em Lote")
     
-   st.subheader("📍 Dados Globais do Local")
+    st.subheader("📍 Dados Globais do Local")
     
     # Geolocalização Automática Robusta
     if st.button("📍 Capturar minha localização atual"):
