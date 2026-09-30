@@ -24,7 +24,7 @@ def carregar_dados():
         if df.empty:
             return pd.DataFrame(columns=[
                 "id", "local", "categoria", "descricao", "nr", "recomendacao", 
-                "prazo", "responsavel", "lat", "lon", "status", "foto_1", "foto_2", "foto_3"
+                "prazo", "responsavel", "lat", "lon", "status", "foto_1", "foto_2", "foto_3", "sublocal"
             ])
         return df
     except Exception as e:
@@ -168,9 +168,9 @@ def gerar_pdf_inspecao(lista_dados):
             pdf.ln(2)
             
             # Configurações de layout em grade (2 colunas)
-            largura_img = 90  # mm por foto (duas cabem perfeitamente em 190mm com folga)
-            altura_img = 60   # mm
-            espacamento_x = 10 # espaço horizontal entre as duas fotos
+            largura_img = 90  
+            altura_img = 60   
+            espacamento_x = 10 
             
             x_inicial = pdf.get_x()
             y_inicial = pdf.get_y()
@@ -184,14 +184,11 @@ def gerar_pdf_inspecao(lista_dados):
                     with open(temp_filename, "wb") as f:
                         f.write(img_data)
                     
-                    # Posicionamento horizontal baseado na coluna (0 ou 1)
                     if coluna_atual == 0:
                         x_pos = x_inicial
                         y_pos = pdf.get_y()
                     else:
-                        # Move para a direita somando a largura da primeira foto + espaçamento
                         x_pos = x_inicial + largura_img + espacamento_x
-                        # Mantém a mesma altura da linha atual
                         pdf.set_xy(x_pos, y_pos)
                         
                     pdf.image(temp_filename, x=x_pos, w=largura_img, h=altura_img)
@@ -199,17 +196,14 @@ def gerar_pdf_inspecao(lista_dados):
                     if os.path.exists(temp_filename):
                         os.remove(temp_filename)
                         
-                    # Alterna a coluna
                     coluna_atual += 1
                     if coluna_atual > 1:
-                        # Se passou de 2 colunas, desce para a próxima linha
                         coluna_atual = 0
                         pdf.ln(altura_img + 5)
                 except Exception as ex:
                     print(f"Erro ao inserir imagem {num_foto} no PDF: {ex}")
                     pass
             
-            # Garante que o cursor salta para baixo após terminar as fotos
             if coluna_atual != 0:
                 pdf.ln(altura_img + 5)
             else:
@@ -223,6 +217,7 @@ def gerar_pdf_inspecao(lista_dados):
         pdf.cell(95, 5, "Assinatura do Responsável", ln=True, align="C")
     
     return pdf.output(dest='S').encode('latin-1')
+
 # --- NAVEGAÇÃO ---
 menu = st.sidebar.selectbox("Navegação", ["Nova Inspeção", "Painel de Gestão (Plano de Ação)", "Dashboard de Indicadores"])
 
@@ -237,7 +232,6 @@ if menu == "Nova Inspeção":
     
     with col_loc1: 
         local_global = st.text_input("Local Geral da Inspeção:", placeholder="Ex: DMO, Galpão Central")
-        # NOVO CAMPO DE SUBLOCAL:
         sublocal_global = st.text_input("Sublocal / Setor Específico:", placeholder="Ex: Serralheria, Carpintaria, Artefatos")
         
     with col_loc2: 
@@ -246,6 +240,7 @@ if menu == "Nova Inspeção":
             lat_global = st.number_input("Latitude", value=-23.55052, format="%.5f") 
         with col_lon: 
             lon_global = st.number_input("Longitude", value=-46.63330, format="%.5f")
+            
     st.markdown("---")
     st.subheader("⚠️ Adicionar Não Conformidade ao Local")
     
@@ -291,7 +286,7 @@ if menu == "Nova Inspeção":
                 "foto_1": f1_str,
                 "foto_2": f2_str,
                 "foto_3": f3_str,
-                "sublocal": str(sublocal)
+                "sublocal": str(sublocal_global) # <-- CORRIGIDO AQUI
             })
             st.toast("Desvio adicionado à fila!")
 
@@ -344,7 +339,6 @@ elif menu == "Painel de Gestão (Plano de Ação)":
             st.info("Nenhum registro encontrado para os filtros selecionados.")
         else: 
             st.dataframe( 
-                # Adicionamos "sublocal" na lista de colunas para exibição:
                 df_filtrado[["id", "local", "sublocal", "categoria", "nr", "prazo", "responsavel", "status"]], 
                 use_container_width=True, index=False 
             ) 
@@ -356,26 +350,12 @@ elif menu == "Painel de Gestão (Plano de Ação)":
                 for idx, row in df_filtrado.iterrows(): 
                     folium.Marker( 
                         [float(row["lat"]), float(row["lon"])], 
-                        # Atualizamos o Popup do mapa para mostrar o Sublocal também:
                         popup=f"<b>Local:</b> {row['local']}<br><b>Sublocal:</b> {row.get('sublocal', 'N/A')}<br><b>Status:</b> {row['status']}" 
                     ).add_to(mapa) 
                 st_folium(mapa, width=1000, height=400) 
             except Exception: 
                 st.warning("Sem coordenadas válidas para exibir o mapa.")
             
-            st.markdown("---")
-            st.subheader("🗺️ Mapa de Riscos / Ocorrências")
-            try:
-                mapa = folium.Map(location=[float(df_filtrado["lat"].astype(float).mean()), float(df_filtrado["lon"].astype(float).mean())], zoom_start=12)
-                for idx, row in df_filtrado.iterrows():
-                    folium.Marker(
-                        [float(row["lat"]), float(row["lon"])],
-                       popup=f"<b>Local:</b> {row['local']}<br><b>Sublocal:</b> {row.get('sublocal', 'N/A')}<br><b>Status:</b> {row['status']}"
-                    ).add_to(mapa)
-                st_folium(mapa, width=1000, height=400)
-            except Exception:
-                st.warning("Sem coordenadas válidas para exibir o mapa.")
-
             st.markdown("---")
             st.subheader("🔍 Ações, Atualização de Status e Relatório Consolidado")
             
@@ -432,6 +412,7 @@ elif menu == "Painel de Gestão (Plano de Ação)":
                             st.rerun()
                         except Exception as e:
                             st.error(f"Erro ao atualizar status: {e}")
+
 # ------------------------------------------------------------------
 # TELA 3: DASHBOARD DE INDICADORES DE SST
 # ------------------------------------------------------------------
