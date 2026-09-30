@@ -232,8 +232,20 @@ menu = st.sidebar.selectbox("Navegação", ["Nova Inspeção", "Painel de Gestã
 if menu == "Nova Inspeção":
     st.header("📝 Registrar Inspeção em Lote")
     
-   You’re making changes in a project you don’t have write access to. Submitting a change will write it to a new branch in your fork Addonini/app-inspecoes-sst, so you can send a pull request.
-            
+   st.subheader("📍 Dados Globais do Local") 
+    col_loc1, col_loc2 = st.columns(2) 
+    
+    with col_loc1: 
+        local_global = st.text_input("Local Geral da Inspeção:", placeholder="Ex: DMO, Galpão Central")
+        # NOVO CAMPO DE SUBLOCAL:
+        sublocal_global = st.text_input("Sublocal / Setor Específico:", placeholder="Ex: Serralheria, Carpintaria, Artefatos")
+        
+    with col_loc2: 
+        col_lat, col_lon = st.columns(2) 
+        with col_lat: 
+            lat_global = st.number_input("Latitude", value=-23.55052, format="%.5f") 
+        with col_lon: 
+            lon_global = st.number_input("Longitude", value=-46.63330, format="%.5f")
     st.markdown("---")
     st.subheader("⚠️ Adicionar Não Conformidade ao Local")
     
