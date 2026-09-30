@@ -370,7 +370,7 @@ elif menu == "Painel de Gestão (Plano de Ação)":
                 for idx, row in df_filtrado.iterrows():
                     folium.Marker(
                         [float(row["lat"]), float(row["lon"])],
-                        popup=f"<b>Local:</b> {row['local']}<br><b>Status:</b> {row['status']}"
+                       popup=f"<b>Local:</b> {row['local']}<br><b>Sublocal:</b> {row.get('sublocal', 'N/A')}<br><b>Status:</b> {row['status']}"
                     ).add_to(mapa)
                 st_folium(mapa, width=1000, height=400)
             except Exception:
