@@ -290,7 +290,8 @@ if menu == "Nova Inspeção":
                 "status": "Pendente",
                 "foto_1": f1_str,
                 "foto_2": f2_str,
-                "foto_3": f3_str
+                "foto_3": f3_str,
+                "sublocal": str(sublocal)
             })
             st.toast("Desvio adicionado à fila!")
 
@@ -315,7 +316,7 @@ if menu == "Nova Inspeção":
                         
                         colunas_banco = [
                             "local", "categoria", "descricao", "nr", "recomendacao", 
-                            "prazo", "responsavel", "lat", "lon", "status", "foto_1", "foto_2", "foto_3"
+                            "prazo", "responsavel", "lat", "lon", "status", "foto_1", "foto_2", "foto_3", "sublocal"
                         ]
                         item_filtrado = {k: v for k, v in item.items() if k in colunas_banco}
                         
@@ -341,11 +342,26 @@ elif menu == "Painel de Gestão (Plano de Ação)":
         
         if df_filtrado.empty:
             st.info("Nenhum registro encontrado para os filtros selecionados.")
-        else:
-            st.dataframe(
-                df_filtrado[["id", "local", "categoria", "nr", "prazo", "responsavel", "status"]],
-                use_container_width=True
-            )
+        else: 
+            st.dataframe( 
+                # Adicionamos "sublocal" na lista de colunas para exibição:
+                df_filtrado[["id", "local", "sublocal", "categoria", "nr", "prazo", "responsavel", "status"]], 
+                use_container_width=True, index=False 
+            ) 
+            
+            st.markdown("---") 
+            st.subheader("🗺️ Mapa de Riscos / Ocorrências") 
+            try: 
+                mapa = folium.Map(location=[float(df_filtrado["lat"].astype(float).mean()), float(df_filtrado["lon"].astype(float).mean())], zoom_start=12) 
+                for idx, row in df_filtrado.iterrows(): 
+                    folium.Marker( 
+                        [float(row["lat"]), float(row["lon"])], 
+                        # Atualizamos o Popup do mapa para mostrar o Sublocal também:
+                        popup=f"<b>Local:</b> {row['local']}<br><b>Sublocal:</b> {row.get('sublocal', 'N/A')}<br><b>Status:</b> {row['status']}" 
+                    ).add_to(mapa) 
+                st_folium(mapa, width=1000, height=400) 
+            except Exception: 
+                st.warning("Sem coordenadas válidas para exibir o mapa.")
             
             st.markdown("---")
             st.subheader("🗺️ Mapa de Riscos / Ocorrências")
