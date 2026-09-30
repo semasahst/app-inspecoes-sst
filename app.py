@@ -232,7 +232,7 @@ menu = st.sidebar.selectbox("Navegação", ["Nova Inspeção", "Painel de Gestã
 if menu == "Nova Inspeção":
     st.header("📝 Registrar Inspeção em Lote")
     
-   st.subheader("📍 Dados Globais do Local") 
+    st.subheader("📍 Dados Globais do Local") 
     col_loc1, col_loc2 = st.columns(2) 
     
     with col_loc1: 
