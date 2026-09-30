@@ -27,9 +27,11 @@ def carregar_dados():
                 "prazo", "responsavel", "lat", "lon", "status", "foto_1", "foto_2", "foto_3", "sublocal"
             ])
             
-        # BLINDAGEM CONTRA O ERRO DA IMAGEM: Garante que a coluna exista para registros antigos
+        # BLINDAGEM: Garante que a coluna sublocal exista para registros antigos
         if "sublocal" not in df.columns:
             df["sublocal"] = "Não Informado"
+        else:
+            df["sublocal"] = df["sublocal"].fillna("Não Informado")
             
         return df
     except Exception as e:
@@ -139,15 +141,15 @@ def gerar_pdf_inspecao(lista_dados):
         pdf.set_text_color(0, 0, 0)
         pdf.set_font("Arial", size=11)
         
-        # Exibindo o Local Geral e o Sublocal (se houver)
-        local_exibicao = f"{dados.get('local')}"
-        if dados.get('sublocal') and dados.get('sublocal') != "Não Informado":
-            local_exibicao += f" - {dados.get('sublocal')}"
+        local_exibicao = f"{dados.get('local', 'N/A')}"
+        sublocal_val = dados.get('sublocal', '')
+        if sublocal_val and str(sublocal_val).strip() not in ["", "nan", "None", "Não Informado"]:
+            local_exibicao += f" / {sublocal_val}"
             
         pdf.cell(95, 8, f"Setor/Local: {local_exibicao}", border=1)
-        pdf.cell(95, 8, f"Data Limite: {dados.get('prazo')}", border=1, ln=True)
-        pdf.cell(95, 8, f"Responsável: {dados.get('responsavel')}", border=1)
-        pdf.cell(95, 8, f"Status Atual: {dados.get('status')}", border=1, ln=True)
+        pdf.cell(95, 8, f"Data Limite: {dados.get('prazo', '')}", border=1, ln=True)
+        pdf.cell(95, 8, f"Responsável: {dados.get('responsavel', '')}", border=1)
+        pdf.cell(95, 8, f"Status Atual: {dados.get('status', '')}", border=1, ln=True)
         pdf.ln(5)
         
         pdf.set_font("Arial", style="B", size=11)
@@ -161,8 +163,8 @@ def gerar_pdf_inspecao(lista_dados):
         pdf.set_fill_color(220, 220, 220)
         pdf.cell(190, 8, "Fundamentação Legal e Recomendações", ln=True, fill=True)
         pdf.set_font("Arial", size=10)
-        pdf.cell(190, 8, f"Enquadramento: {dados.get('nr')}", border=1, ln=True)
-        pdf.multi_cell(190, 8, f"Recomendação:\n{dados.get('recomendacao')}", border=1)
+        pdf.cell(190, 8, f"Enquadramento: {dados.get('nr', '')}", border=1, ln=True)
+        pdf.multi_cell(190, 8, f"Recomendação:\n{dados.get('recomendacao', '')}", border=1)
         pdf.ln(5)
         
         # --- COLETA E RENDERIZAÇÃO DAS FOTOS EM 2 COLUNAS ---
@@ -283,6 +285,7 @@ if menu == "Nova Inspeção":
             
             st.session_state.carrinho_desvios.append({
                 "local": str(local_global),
+                "sublocal": str(sublocal_global) if sublocal_global else "Não Informado",
                 "categoria": str(categoria),
                 "descricao": str(descricao),
                 "nr": str(nr_sugerida),
@@ -294,8 +297,7 @@ if menu == "Nova Inspeção":
                 "status": "Pendente",
                 "foto_1": f1_str,
                 "foto_2": f2_str,
-                "foto_3": f3_str,
-                "sublocal": str(sublocal_global) 
+                "foto_3": f3_str
             })
             st.toast("Desvio adicionado à fila!")
 
@@ -304,7 +306,7 @@ if menu == "Nova Inspeção":
         st.subheader(f"📋 Desvios aguardando envio ({len(st.session_state.carrinho_desvios)})")
         
         df_carrinho = pd.DataFrame(st.session_state.carrinho_desvios)
-        st.dataframe(df_carrinho[["categoria", "descricao", "nr", "responsavel"]], use_container_width=True)
+        st.dataframe(df_carrinho[["local", "sublocal", "categoria", "descricao", "nr", "responsavel"]], use_container_width=True)
         
         col_btn1, col_btn2 = st.columns([1, 5])
         with col_btn1:
@@ -319,8 +321,8 @@ if menu == "Nova Inspeção":
                             del item["id"]
                         
                         colunas_banco = [
-                            "local", "categoria", "descricao", "nr", "recomendacao", 
-                            "prazo", "responsavel", "lat", "lon", "status", "foto_1", "foto_2", "foto_3", "sublocal"
+                            "local", "sublocal", "categoria", "descricao", "nr", "recomendacao", 
+                            "prazo", "responsavel", "lat", "lon", "status", "foto_1", "foto_2", "foto_3"
                         ]
                         item_filtrado = {k: v for k, v in item.items() if k in colunas_banco}
                         
@@ -357,9 +359,10 @@ elif menu == "Painel de Gestão (Plano de Ação)":
             try: 
                 mapa = folium.Map(location=[float(df_filtrado["lat"].astype(float).mean()), float(df_filtrado["lon"].astype(float).mean())], zoom_start=12) 
                 for idx, row in df_filtrado.iterrows(): 
+                    sub_txt = f" / {row['sublocal']}" if row.get('sublocal') and row['sublocal'] != "Não Informado" else ""
                     folium.Marker( 
                         [float(row["lat"]), float(row["lon"])], 
-                        popup=f"<b>Local:</b> {row['local']}<br><b>Sublocal:</b> {row.get('sublocal', 'N/A')}<br><b>Status:</b> {row['status']}" 
+                        popup=f"<b>Local:</b> {row['local']}{sub_txt}<br><b>Status:</b> {row['status']}" 
                     ).add_to(mapa) 
                 st_folium(mapa, width=1000, height=400) 
             except Exception: 
@@ -393,7 +396,8 @@ elif menu == "Painel de Gestão (Plano de Ação)":
                 
                 col_det1, col_det2 = st.columns(2)
                 with col_det1:
-                    st.write(f"**📍 Local:** {detalhe['local']} - {detalhe.get('sublocal', '')}")
+                    sub_det = f" / {detalhe['sublocal']}" if detalhe.get('sublocal') and detalhe['sublocal'] != "Não Informado" else ""
+                    st.write(f"**📍 Local:** {detalhe['local']}{sub_det}")
                     st.write(f"**⚠️ Risco:** {detalhe['categoria']}")
                     st.write(f"**⚖️ Enquadramento:** {detalhe['nr']}")
                     st.write(f"**📝 Descrição:** {detalhe['descricao']}")
@@ -466,16 +470,11 @@ elif menu == "Dashboard de Indicadores":
         st.markdown("---")
         st.subheader("🏢 Incidência de Desvios por Setor / Local")
         if "local" in df_existente.columns:
-            # Junta Local e Sublocal para o gráfico se a coluna sublocal existir
             df_local_chart = df_existente.copy()
-            if "sublocal" in df_local_chart.columns:
-                df_local_chart["Local_Completo"] = df_local_chart.apply(
-                    lambda row: f"{row['local']} - {row['sublocal']}" if pd.notna(row.get('sublocal')) and row.get('sublocal') != "Não Informado" else row['local'], 
-                    axis=1
-                )
-            else:
-                df_local_chart["Local_Completo"] = df_local_chart["local"]
-                
+            df_local_chart["Local_Completo"] = df_local_chart.apply(
+                lambda row: f"{row['local']} / {row['sublocal']}" if pd.notna(row.get('sublocal')) and row.get('sublocal') != "Não Informado" else row['local'], 
+                axis=1
+            )
             df_local_agrupado = df_local_chart["Local_Completo"].value_counts().reset_index()
             df_local_agrupado.columns = ["Local / Sublocal", "Quantidade"]
             st.bar_chart(df_local_agrupado.set_index("Local / Sublocal"))
