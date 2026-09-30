@@ -16,7 +16,7 @@ url: str = st.secrets["SUPABASE_URL"]
 key: str = st.secrets["SUPABASE_KEY"]
 supabase: Client = create_client(url, key)
 
-# Função para carregar dados do Supabase
+# Função para carregar dados do Supabase com Programação Defensiva
 def carregar_dados():
     try:
         response = supabase.table("inspecoes").select("*").execute()
@@ -26,6 +26,11 @@ def carregar_dados():
                 "id", "local", "categoria", "descricao", "nr", "recomendacao", 
                 "prazo", "responsavel", "lat", "lon", "status", "foto_1", "foto_2", "foto_3", "sublocal"
             ])
+            
+        # BLINDAGEM CONTRA O ERRO DA IMAGEM: Garante que a coluna exista para registros antigos
+        if "sublocal" not in df.columns:
+            df["sublocal"] = "Não Informado"
+            
         return df
     except Exception as e:
         st.error(f"Erro ao conectar ao Supabase: {e}")
@@ -37,7 +42,7 @@ df_existente = carregar_dados()
 if "carrinho_desvios" not in st.session_state:
     st.session_state.carrinho_desvios = []
 
-# --- CATÁLOGO AMPLIADO DE NÃO CONFORMIDADES (AGILIDADE EM CAMPO) ---
+# --- CATÁLOGO AMPLIADO DE NÃO CONFORMIDADES ---
 DICIONARIO_NRS = {
     "NR 01 - PGR (Gerenciamento de Riscos)": {
         "nr": "NR-01 (Disposições Gerais e Gerenciamento de Riscos Ocupacionais)",
@@ -133,7 +138,13 @@ def gerar_pdf_inspecao(lista_dados):
         
         pdf.set_text_color(0, 0, 0)
         pdf.set_font("Arial", size=11)
-        pdf.cell(95, 8, f"Setor/Local: {dados.get('local')}", border=1)
+        
+        # Exibindo o Local Geral e o Sublocal (se houver)
+        local_exibicao = f"{dados.get('local')}"
+        if dados.get('sublocal') and dados.get('sublocal') != "Não Informado":
+            local_exibicao += f" - {dados.get('sublocal')}"
+            
+        pdf.cell(95, 8, f"Setor/Local: {local_exibicao}", border=1)
         pdf.cell(95, 8, f"Data Limite: {dados.get('prazo')}", border=1, ln=True)
         pdf.cell(95, 8, f"Responsável: {dados.get('responsavel')}", border=1)
         pdf.cell(95, 8, f"Status Atual: {dados.get('status')}", border=1, ln=True)
@@ -167,7 +178,6 @@ def gerar_pdf_inspecao(lista_dados):
             pdf.cell(190, 8, "Evidências Fotográficas", ln=True, align="L")
             pdf.ln(2)
             
-            # Configurações de layout em grade (2 colunas)
             largura_img = 90  
             altura_img = 60   
             espacamento_x = 10 
@@ -201,7 +211,6 @@ def gerar_pdf_inspecao(lista_dados):
                         coluna_atual = 0
                         pdf.ln(altura_img + 5)
                 except Exception as ex:
-                    print(f"Erro ao inserir imagem {num_foto} no PDF: {ex}")
                     pass
             
             if coluna_atual != 0:
@@ -286,7 +295,7 @@ if menu == "Nova Inspeção":
                 "foto_1": f1_str,
                 "foto_2": f2_str,
                 "foto_3": f3_str,
-                "sublocal": str(sublocal_global) # <-- CORRIGIDO AQUI
+                "sublocal": str(sublocal_global) 
             })
             st.toast("Desvio adicionado à fila!")
 
@@ -381,11 +390,10 @@ elif menu == "Painel de Gestão (Plano de Ação)":
             
             if id_individual:
                 detalhe = df_existente[df_existente["id"].astype(str) == str(id_individual)].iloc[0]
-                idx_original = df_existente[df_existente["id"].astype(str) == str(id_individual)].index[0]
                 
                 col_det1, col_det2 = st.columns(2)
                 with col_det1:
-                    st.write(f"**📍 Local:** {detalhe['local']}")
+                    st.write(f"**📍 Local:** {detalhe['local']} - {detalhe.get('sublocal', '')}")
                     st.write(f"**⚠️ Risco:** {detalhe['categoria']}")
                     st.write(f"**⚖️ Enquadramento:** {detalhe['nr']}")
                     st.write(f"**📝 Descrição:** {detalhe['descricao']}")
@@ -422,7 +430,6 @@ elif menu == "Dashboard de Indicadores":
     if df_existente.empty or len(df_existente) == 0:
         st.info("Ainda não há dados suficientes no Supabase para gerar o dashboard.")
     else:
-        # Métricas Principais (KPIs no topo)
         total_desvios = len(df_existente)
         pendentes = len(df_existente[df_existente["status"] == "Pendente"])
         em_andamento = len(df_existente[df_existente["status"] == "Em Andamento"])
@@ -440,7 +447,6 @@ elif menu == "Dashboard de Indicadores":
             
         st.markdown("---")
         
-        # Gráficos Analíticos
         col_g1, col_g2 = st.columns(2)
         
         with col_g1:
@@ -460,6 +466,16 @@ elif menu == "Dashboard de Indicadores":
         st.markdown("---")
         st.subheader("🏢 Incidência de Desvios por Setor / Local")
         if "local" in df_existente.columns:
-            df_local = df_existente["local"].value_counts().reset_index()
-            df_local.columns = ["Local", "Quantidade"]
-            st.bar_chart(df_local.set_index("Local"))
+            # Junta Local e Sublocal para o gráfico se a coluna sublocal existir
+            df_local_chart = df_existente.copy()
+            if "sublocal" in df_local_chart.columns:
+                df_local_chart["Local_Completo"] = df_local_chart.apply(
+                    lambda row: f"{row['local']} - {row['sublocal']}" if pd.notna(row.get('sublocal')) and row.get('sublocal') != "Não Informado" else row['local'], 
+                    axis=1
+                )
+            else:
+                df_local_chart["Local_Completo"] = df_local_chart["local"]
+                
+            df_local_agrupado = df_local_chart["Local_Completo"].value_counts().reset_index()
+            df_local_agrupado.columns = ["Local / Sublocal", "Quantidade"]
+            st.bar_chart(df_local_agrupado.set_index("Local / Sublocal"))
